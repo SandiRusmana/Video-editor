@@ -1,0 +1,145 @@
+// prisma/schema.prisma
+// Jalankan: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------
+// AUTH
+// ---------------------------------------------------------------
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  name      String
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+// ---------------------------------------------------------------
+// PROJECT
+// ---------------------------------------------------------------
+model Project {
+  id         String        @id @default(uuid())
+  title      String
+  ownerId    String
+  owner      User          @relation(fields: [ownerId], references: [id])
+  width      Int           @default(1920)
+  height     Int           @default(1080)
+  fps        Int           @default(30)
+  media      Media[]
+  tracks     Track[]
+  exports    ExportJob[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+// ---------------------------------------------------------------
+// MEDIA LIBRARY
+// ---------------------------------------------------------------
+enum MediaType {
+  VIDEO
+  AUDIO
+  IMAGE
+}
+
+model Media {
+  id         String    @id @default(uuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type       MediaType
+  fileName   String
+  filePath   String
+  duration   Float?    // null untuk gambar
+  thumbnail  String?
+  clips      Clip[]
+  createdAt  DateTime  @default(now())
+}
+
+// ---------------------------------------------------------------
+// TIMELINE: Track -> Clip
+// ---------------------------------------------------------------
+enum TrackType {
+  VIDEO
+  AUDIO
+  TEXT
+}
+
+model Track {
+  id        String    @id @default(uuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      TrackType
+  order     Int       @default(0)   // urutan trek dari atas ke bawah
+  clips     Clip[]
+}
+
+model Clip {
+  id         String   @id @default(uuid())
+  trackId    String
+  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  mediaId    String?
+  media      Media?   @relation(fields: [mediaId], references: [id])
+
+  // posisi di timeline (detik)
+  timelineStart Float
+  inPoint       Float   @default(0)     // trim masuk (detik, relatif ke source)
+  outPoint      Float   @default(0)     // trim keluar
+
+  // transform (dipakai untuk video/gambar/teks)
+  x          Float    @default(0)
+  y          Float    @default(0)
+  scale      Float    @default(1)
+  rotation   Float    @default(0)
+  opacity    Float    @default(1)
+  cropX      Float?
+  cropY      Float?
+  cropW      Float?
+  cropH      Float?
+
+  // audio
+  volume     Float    @default(1)
+  muted      Boolean  @default(false)
+
+  // teks overlay
+  textContent String?
+  fontSize    Int?
+  fontColor   String?
+
+  // efek
+  filter      String?   // nama filter, mis. "grayscale", "sepia"
+  transitionIn  String?
+  transitionOut String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------
+// RENDER / EXPORT
+// ---------------------------------------------------------------
+enum RenderStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model ExportJob {
+  id         String       @id @default(uuid())
+  projectId  String
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status     RenderStatus @default(QUEUED)
+  progress   Int          @default(0)   // 0-100
+  outputPath String?
+  errorMsg   String?
+  createdAt  DateTime     @default(now())
+  finishedAt DateTime?
+}
