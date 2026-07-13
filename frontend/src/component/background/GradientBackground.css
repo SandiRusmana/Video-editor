@@ -1,0 +1,44 @@
+.gradient-bg {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background:
+    radial-gradient(
+      ellipse 900px 500px at 50% 8%,
+      #e9e0ff 0%,
+      #cbb8fb 18%,
+      #a888f5 34%,
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      #8a68e6 0%,
+      #7952d6 22%,
+      #5a3aa8 40%,
+      #2a1a4a 58%,
+      #0d0812 75%,
+      #000000 100%
+    );
+  background-repeat: no-repeat;
+  background-size:
+    140% 140%,
+    100% 100%;
+}
+
+.gradient-bg-animated {
+  animation: gradientDrift 10s ease-in-out infinite;
+}
+
+@keyframes gradientDrift {
+  0% {
+    background-position: 50% 30%;
+  }
+  50% {
+    background-position: 50% 45%;
+  }
+  100% {
+    background-position: 50% 30%;
+  }
+}
