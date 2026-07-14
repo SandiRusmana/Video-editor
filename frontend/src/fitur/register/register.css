@@ -1,0 +1,106 @@
+.nerve-page {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.login-wraper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.card-login {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(30, 20, 60, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 32px 28px;
+  backdrop-filter: blur(10px);
+}
+
+.header-login {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.header-login h2 {
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.header-login p {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  margin: 0;
+}
+
+.form-login {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-group label {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.input-group input {
+  height: 44px;
+  border-radius: 15px;
+  border: none;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.35);
+  color: #1a1a1a;
+  font-size: 14px;
+  outline: none;
+}
+
+.input-group input::placeholder {
+  color: rgba(30, 20, 60, 0.6);
+}
+
+.input-group input:focus {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.button-login {
+  height: 46px;
+  border: none;
+  border-radius: 15px;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.2s ease;
+}
+
+.button-login:hover {
+  opacity: 0.9;
+}
+
+.footer-login {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  margin-top: 20px;
+}
+
+.footer-login b {
+  color: #ffffff;
+  cursor: pointer;
+}
