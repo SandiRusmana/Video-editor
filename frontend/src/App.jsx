@@ -17,10 +17,14 @@ function App() {
       )}
 
       {/* 2. Kondisi pas tampil halaman Login */}
-      {halaman === "login" && <Login />}
+      {halaman === "login" && (
+        <Login onPindahKeRegister={() => setHalaman("register")} />
+      )}
 
       {/* 3. Kondisi pas tampil halaman Register */}
-      {halaman === "register" && <Register />}
+      {halaman === "register" && (
+        <Register onPindahKeLogin={() => setHalaman("login")} />
+      )}
     </div>
   );
 }
