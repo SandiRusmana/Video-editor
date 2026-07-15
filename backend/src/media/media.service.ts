@@ -4,19 +4,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import * as ffmpeg from 'fluent-ffmpeg';
+import ffmpeg from 'fluent-ffmpeg';
 import * as ffprobeStatic from 'ffprobe-static';
+import ffmpegStatic from 'ffmpeg-static';
 import * as sizeOf from 'image-size';
 import * as fs from 'fs';
 import { extname } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { MediaType } from '@prisma/client';
 
-// Arahkan fluent-ffmpeg ke binary ffprobe yang sudah dibundel package
-// ffprobe-static, jadi tidak perlu install FFmpeg manual di komputer.
+// Arahkan fluent-ffmpeg ke binary ffmpeg & ffprobe yang sudah dibundel
+// package *-static, jadi tidak perlu install FFmpeg manual di komputer.
 ffmpeg.setFfprobePath(ffprobeStatic.path);
+ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
 
-// Tipe file yang diizinkan (Acceptance 3) + batas ukuran per tipe (Acceptance 4)
 const ALLOWED_MIME: Record<string, { type: MediaType; maxSize: number }> = {
   'video/mp4': { type: 'VIDEO', maxSize: 500 * 1024 * 1024 },
   'video/quicktime': { type: 'VIDEO', maxSize: 500 * 1024 * 1024 },
@@ -33,9 +34,6 @@ const ALLOWED_MIME: Record<string, { type: MediaType; maxSize: number }> = {
   'image/webp': { type: 'IMAGE', maxSize: 20 * 1024 * 1024 },
 };
 
-// Fallback berdasarkan ekstensi file — dipakai kalau mimetype yang terdeteksi
-// OS/browser tidak akurat (sering terjadi di Windows untuk format .opus/.ogg
-// yang suka salah kedetect sebagai "video/mpeg").
 const ALLOWED_EXT: Record<string, { type: MediaType; maxSize: number }> = {
   '.mp4': { type: 'VIDEO', maxSize: 500 * 1024 * 1024 },
   '.mov': { type: 'VIDEO', maxSize: 500 * 1024 * 1024 },
@@ -56,12 +54,16 @@ const ALLOWED_EXT: Record<string, { type: MediaType; maxSize: number }> = {
   '.webp': { type: 'IMAGE', maxSize: 20 * 1024 * 1024 },
 };
 
+const THUMBNAIL_DIR = './uploads';
+
 @Injectable()
 export class MediaService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {
+    if (!fs.existsSync(THUMBNAIL_DIR)) {
+      fs.mkdirSync(THUMBNAIL_DIR, { recursive: true });
+    }
+  }
 
-  // Cek mimetype dulu; kalau tidak dikenali/salah deteksi, coba tebak dari
-  // ekstensi nama file sebagai fallback.
   static resolveType(mimetype: string, filename: string) {
     if (ALLOWED_MIME[mimetype]) return ALLOWED_MIME[mimetype];
     const ext = extname(filename).toLowerCase();
@@ -73,7 +75,6 @@ export class MediaService {
     projectId: string,
     file: Express.Multer.File,
   ) {
-    // Pastikan project ada & milik user ini (proteksi kepemilikan, konsisten sama Project module)
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!project) {
       this.safeDelete(file.path);
@@ -84,7 +85,6 @@ export class MediaService {
       throw new ForbiddenException('Bukan pemilik project ini');
     }
 
-    // Validasi tipe file (Acceptance 3)
     const resolved = MediaService.resolveType(file.mimetype, file.originalname);
     if (!resolved) {
       this.safeDelete(file.path);
@@ -93,7 +93,6 @@ export class MediaService {
       );
     }
 
-    // Validasi ukuran file (Acceptance 4)
     if (file.size > resolved.maxSize) {
       this.safeDelete(file.path);
       throw new BadRequestException(
@@ -101,10 +100,9 @@ export class MediaService {
       );
     }
 
-    // Ekstrak metadata (durasi & resolusi) sesuai tipe file (Acceptance 7)
     const metadata = await this.extractMetadata(file.path, resolved.type);
+    const thumbnail = await this.generateThumbnail(file.path, file.filename, resolved.type);
 
-    // Simpan metadata ke database (Acceptance 5, 6)
     return this.prisma.media.create({
       data: {
         projectId,
@@ -115,21 +113,35 @@ export class MediaService {
         duration: metadata.duration,
         width: metadata.width,
         height: metadata.height,
+        thumbnail,
       },
     });
   }
 
-  findAllForProject(projectId: string) {
+  // Acceptance 4 (story Media Library): ambil daftar media berdasar project,
+  // sekaligus pastikan yang minta itu pemilik project-nya (konsisten dengan
+  // proteksi kepemilikan di module Project).
+  async findAllForProject(userId: string, projectId: string) {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project tidak ditemukan');
+    if (project.ownerId !== userId) throw new ForbiddenException('Bukan pemilik project ini');
+
     return this.prisma.media.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async remove(id: string) {
-    const media = await this.prisma.media.findUnique({ where: { id } });
+  async remove(userId: string, id: string) {
+    const media = await this.prisma.media.findUnique({
+      where: { id },
+      include: { project: true },
+    });
     if (!media) throw new NotFoundException('Media tidak ditemukan');
-    this.safeDelete(`.${media.path}`); // hapus file fisik juga
+    if (media.project.ownerId !== userId) throw new ForbiddenException('Bukan pemilik project ini');
+
+    this.safeDelete(`.${media.path}`);
+    if (media.thumbnail) this.safeDelete(`.${media.thumbnail}`);
     return this.prisma.media.delete({ where: { id } });
   }
 
@@ -144,18 +156,15 @@ export class MediaService {
         const dimensions = sizeOf.imageSize(fs.readFileSync(filePath));
         return Promise.resolve({ width: dimensions.width, height: dimensions.height });
       } catch {
-        return Promise.resolve({}); // gambar tetap tersimpan walau gagal baca dimensi
+        return Promise.resolve({});
       }
     }
 
-    // VIDEO & AUDIO: pakai ffprobe
     return new Promise((resolve) => {
       ffmpeg.ffprobe(filePath, (err, data) => {
-        if (err) return resolve({}); // tetap simpan media walau metadata gagal diambil
-
+        if (err) return resolve({});
         const duration = data.format?.duration;
         const videoStream = data.streams?.find((s) => s.codec_type === 'video');
-
         resolve({
           duration: duration ? Math.round(duration * 100) / 100 : undefined,
           width: videoStream?.width,
@@ -165,7 +174,38 @@ export class MediaService {
     });
   }
 
+  // Acceptance 5 (story Media Library): thumbnail untuk video diambil dari
+  // frame di detik pertama. Untuk gambar, file itu sendiri dipakai sebagai
+  // thumbnail-nya (tidak perlu proses tambahan). Audio tidak punya thumbnail
+  // visual — biar ditampilkan pakai ikon generik di frontend.
+  private generateThumbnail(
+    filePath: string,
+    filename: string,
+    type: MediaType,
+  ): Promise<string | undefined> {
+    if (type === 'IMAGE') {
+      return Promise.resolve(`/uploads/${filename}`);
+    }
+
+    if (type === 'VIDEO') {
+      const thumbName = `thumb-${filename}.jpg`;
+      return new Promise((resolve) => {
+        ffmpeg(filePath)
+          .on('end', () => resolve(`/uploads/${thumbName}`))
+          .on('error', () => resolve(undefined))
+          .screenshots({
+            timestamps: ['1'],
+            filename: thumbName,
+            folder: THUMBNAIL_DIR,
+            size: '320x?',
+          });
+      });
+    }
+
+    return Promise.resolve(undefined); // AUDIO
+  }
+
   private safeDelete(path: string) {
-    fs.unlink(path, () => { }); // abaikan error kalau file memang belum/tidak ada
+    fs.unlink(path, () => { });
   }
 }
