@@ -22,12 +22,18 @@ function App() {
 
       {/* 2. Kondisi pas tampil halaman Login */}
       {halaman === "login" && (
-        <Login onLoginBerhasil={() => setHalaman("dashboard")} />
+        <Login 
+          onLoginBerhasil={() => setHalaman("dashboard")} 
+          onPindahKeRegister={() => setHalaman("register")} 
+        />
       )}
 
       {/* 3. Kondisi pas tampil halaman Register */}
       {halaman === "register" && (
-        <Register onRegisterBerhasil={() => setHalaman("dashboard")} />
+        <Register 
+          onRegisterBerhasil={() => setHalaman("dashboard")} 
+          onPindahKeLogin={() => setHalaman("login")} 
+        />
       )}
 
       {/* 4. Kondisi pas tampil halaman Dashboard */}

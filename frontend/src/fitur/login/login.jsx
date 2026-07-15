@@ -1,25 +1,48 @@
-import React from "react";
+import React, { useState } from "react";
 import GradientBackground from "../../component/background/GradientBackground.jsx";
 import "./login.css";
 
-function Login({ onLoginBerhasil }) {
-  const handleLogin = (e) => {
+function Login({ onLoginBerhasil, onPindahKeRegister }) {
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.id]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setErrorMsg("");
 
-    // TODO: nanti di sini logika cek email & password ke backend tim kamu
-    // contoh nanti kalau sudah ada API:
-    // fetch("/api/login", { method: "POST", body: ... })
-    //   .then(res => res.json())
-    //   .then(data => {
-    //     if (data.success) {
-    //       onLoginBerhasil();
-    //     } else {
-    //       alert("Email atau password salah");
-    //     }
-    //   });
+    try {
+      const response = await fetch("http://localhost:3000/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
-    // sementara ini langsung dianggap berhasil (belum ada backend)
-    onLoginBerhasil();
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Gagal masuk");
+      }
+
+      alert("Berhasil masuk! Token: " + (data.access_token || data.token || "Berhasil"));
+      // TODO: Simpan token ke localStorage dan arahkan ke dashboard
+      // localStorage.setItem("token", data.access_token);
+      
+      // Memanggil fungsi operan agar pindah ke halaman dashboard
+      onLoginBerhasil();
+      
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -32,10 +55,19 @@ function Login({ onLoginBerhasil }) {
               <p>Masuk untuk melanjutkan</p>
             </div>
 
-            <form className="form-login" onSubmit={handleLogin}>
+            {errorMsg && <p style={{ color: "red", textAlign: "center", marginBottom: "10px" }}>{errorMsg}</p>}
+
+            <form className="form-login" onSubmit={handleSubmit}>
               <div className="input-group">
                 <label htmlFor="email">Alamat Email</label>
-                <input type="email" id="email" placeholder="Email@email.com" />
+                <input 
+                  type="email" 
+                  id="email" 
+                  placeholder="Email@email.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required 
+                />
               </div>
 
               <div className="input-group">
@@ -44,16 +76,19 @@ function Login({ onLoginBerhasil }) {
                   type="password"
                   id="password"
                   placeholder="Masukkan kata sandi"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
                 />
               </div>
 
-              <button type="submit" className="button-login">
-                Masuk
+              <button type="submit" className="button-login" disabled={loading}>
+                {loading ? "Masuk..." : "Masuk"}
               </button>
             </form>
 
             <p className="footer-login">
-              Belum punya akun? <b>Daftar</b>
+              Belum punya akun? <b onClick={onPindahKeRegister} style={{cursor: "pointer"}}>Daftar</b>
             </p>
           </div>
         </div>
