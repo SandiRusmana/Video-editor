@@ -1,13 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MediaType, TrackType } from '@prisma/client';
 
 const DEFAULT_IMAGE_DURATION = 5; // detik, dipakai kalau media tidak punya durasi (gambar)
 
 @Injectable()
 export class TimelineService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
-  // Pastikan project ini milik user yang login (dipakai di semua method di bawah)
   private async assertProjectOwnership(userId: string, projectId: string) {
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project tidak ditemukan');
@@ -15,28 +15,30 @@ export class TimelineService {
     return project;
   }
 
-  // Story 7, Acceptance 2: track utama untuk proses editing.
-  // Dibuat otomatis kalau project belum punya track sama sekali —
-  // user tidak perlu membuat track secara manual.
-  private async getOrCreateMainTrack(projectId: string) {
+  // Story 8: video & gambar otomatis masuk track VIDEO, audio masuk
+  // track AUDIO — supaya media dari tipe berbeda tidak tercampur di satu
+  // track yang sama. Track dibuat otomatis kalau belum ada.
+  private mapMediaTypeToTrackType(mediaType: MediaType): TrackType {
+    return mediaType === 'AUDIO' ? 'AUDIO' : 'VIDEO';
+  }
+
+  private async getOrCreateTrack(projectId: string, trackType: TrackType) {
     const existing = await this.prisma.track.findFirst({
-      where: { projectId, type: 'VIDEO' },
+      where: { projectId, type: trackType },
       orderBy: { order: 'asc' },
     });
     if (existing) return existing;
 
+    const trackCount = await this.prisma.track.count({ where: { projectId } });
     return this.prisma.track.create({
-      data: { projectId, type: 'VIDEO', order: 0 },
+      data: { projectId, type: trackType, order: trackCount },
     });
   }
 
-  // Acceptance 1, 4, 5, 6, 7, 11, 12: ambil seluruh isi timeline sebuah
-  // project — track beserta clip-clip di dalamnya, terurut sesuai posisi,
-  // masing-masing clip menyertakan info media (nama & durasi).
   async getTimeline(userId: string, projectId: string) {
     await this.assertProjectOwnership(userId, projectId);
 
-    const tracks = await this.prisma.track.findMany({
+    return this.prisma.track.findMany({
       where: { projectId },
       orderBy: { order: 'asc' },
       include: {
@@ -50,15 +52,14 @@ export class TimelineService {
         },
       },
     });
-
-    return tracks;
   }
 
-  // Acceptance 3, 6, 7, 11: tambahkan media dari Media Library ke timeline.
-  // Posisi (timelineStart) dihitung otomatis: ditempel di ujung clip
-  // terakhir pada track utama, sehingga urutan selalu mengikuti urutan
-  // penambahan seperti yang diminta acceptance criteria.
-  async addClip(userId: string, projectId: string, mediaId: string) {
+  // Story 7 & 8: tambahkan media ke timeline sebagai clip baru.
+  // - Kalau `customStart` dikirim (hasil drag & drop ke posisi tertentu),
+  //   posisi itu yang dipakai.
+  // - Kalau tidak dikirim, clip otomatis ditempel di ujung track yang
+  //   sesuai (perilaku default / penambahan biasa dari Media Library).
+  async addClip(userId: string, projectId: string, mediaId: string, customStart?: number) {
     await this.assertProjectOwnership(userId, projectId);
 
     const media = await this.prisma.media.findUnique({ where: { id: mediaId } });
@@ -67,15 +68,21 @@ export class TimelineService {
       throw new ForbiddenException('Media ini bukan bagian dari project yang dimaksud');
     }
 
-    const track = await this.getOrCreateMainTrack(projectId);
-
-    const lastClip = await this.prisma.clip.findFirst({
-      where: { trackId: track.id },
-      orderBy: { timelineStart: 'desc' },
-    });
+    const trackType = this.mapMediaTypeToTrackType(media.type);
+    const track = await this.getOrCreateTrack(projectId, trackType);
 
     const clipDuration = media.duration ?? DEFAULT_IMAGE_DURATION;
-    const timelineStart = lastClip ? lastClip.timelineStart + (lastClip.outPoint - lastClip.inPoint) : 0;
+
+    let timelineStart: number;
+    if (customStart !== undefined) {
+      timelineStart = customStart;
+    } else {
+      const lastClip = await this.prisma.clip.findFirst({
+        where: { trackId: track.id },
+        orderBy: { timelineStart: 'desc' },
+      });
+      timelineStart = lastClip ? lastClip.timelineStart + (lastClip.outPoint - lastClip.inPoint) : 0;
+    }
 
     return this.prisma.clip.create({
       data: {
