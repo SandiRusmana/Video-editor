@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import GradientBackground from "../../component/background/GradientBackground.jsx";
 import "./login.css";
 
-function Login({ onPindahKeRegister }) {
+function Login({ onLoginBerhasil, onPindahKeRegister }) {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,6 +34,9 @@ function Login({ onPindahKeRegister }) {
       alert("Berhasil masuk! Token: " + (data.access_token || data.token || "Berhasil"));
       // TODO: Simpan token ke localStorage dan arahkan ke dashboard
       // localStorage.setItem("token", data.access_token);
+      
+      // Memanggil fungsi operan agar pindah ke halaman dashboard
+      onLoginBerhasil();
       
     } catch (err) {
       setErrorMsg(err.message);

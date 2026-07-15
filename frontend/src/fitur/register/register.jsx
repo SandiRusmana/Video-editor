@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import GradientBackground from "../../component/background/GradientBackground.jsx";
 import "./register.css";
 
-function Register({ onPindahKeLogin }) {
+function Register({ onRegisterBerhasil, onPindahKeLogin }) {
   const [formData, setFormData] = useState({ name: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,7 +34,13 @@ function Register({ onPindahKeLogin }) {
       }
 
       alert("Pendaftaran berhasil! Silakan masuk dengan akun Anda.");
-      onPindahKeLogin(); // Pindah ke halaman login setelah berhasil
+      
+      // Memanggil fungsi operan dari branch kamu atau kembali ke login
+      if (onRegisterBerhasil) {
+        onRegisterBerhasil();
+      } else {
+        onPindahKeLogin();
+      }
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
@@ -102,7 +108,7 @@ function Register({ onPindahKeLogin }) {
           </div>
         </div>
       </GradientBackground>
-      </div>
+    </div>
   );
 }
 
