@@ -2,7 +2,26 @@ import React from "react";
 import GradientBackground from "../../component/background/GradientBackground.jsx";
 import "./login.css";
 
-function Login() {
+function Login({ onLoginBerhasil }) {
+  const handleLogin = (e) => {
+    e.preventDefault();
+
+    // TODO: nanti di sini logika cek email & password ke backend tim kamu
+    // contoh nanti kalau sudah ada API:
+    // fetch("/api/login", { method: "POST", body: ... })
+    //   .then(res => res.json())
+    //   .then(data => {
+    //     if (data.success) {
+    //       onLoginBerhasil();
+    //     } else {
+    //       alert("Email atau password salah");
+    //     }
+    //   });
+
+    // sementara ini langsung dianggap berhasil (belum ada backend)
+    onLoginBerhasil();
+  };
+
   return (
     <div className="nerve-page">
       <GradientBackground>
@@ -13,7 +32,7 @@ function Login() {
               <p>Masuk untuk melanjutkan</p>
             </div>
 
-            <form className="form-login">
+            <form className="form-login" onSubmit={handleLogin}>
               <div className="input-group">
                 <label htmlFor="email">Alamat Email</label>
                 <input type="email" id="email" placeholder="Email@email.com" />

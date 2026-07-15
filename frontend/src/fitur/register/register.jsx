@@ -2,7 +2,26 @@ import React from "react";
 import GradientBackground from "../../component/background/GradientBackground.jsx";
 import "./register.css";
 
-function Register() {
+function Register({ onRegisterBerhasil }) {
+  const handleRegister = (e) => {
+    e.preventDefault();
+
+    // TODO: nanti di sini logika kirim data daftar akun ke backend tim kamu
+    // contoh nanti kalau sudah ada API:
+    // fetch("/api/register", { method: "POST", body: ... })
+    //   .then(res => res.json())
+    //   .then(data => {
+    //     if (data.success) {
+    //       onRegisterBerhasil();
+    //     } else {
+    //       alert("Pendaftaran gagal, coba lagi");
+    //     }
+    //   });
+
+    // sementara ini langsung dianggap berhasil (belum ada backend)
+    onRegisterBerhasil();
+  };
+
   return (
     <div className="nerve-page">
       <GradientBackground>
@@ -13,10 +32,10 @@ function Register() {
               <p>Mulai kelola proyek video anda</p>
             </div>
 
-            <form className="form-login">
+            <form className="form-login" onSubmit={handleRegister}>
               <div className="input-group">
                 <label htmlFor="name">Nama lengkap</label>
-                <input type="name" id="name" placeholder="Steven Ucok" />
+                <input type="text" id="name" placeholder="Steven Ucok" />
               </div>
               <div className="input-group">
                 <label htmlFor="email">Alamat Email</label>
@@ -43,7 +62,7 @@ function Register() {
           </div>
         </div>
       </GradientBackground>
-      </div>
+    </div>
   );
 }
 

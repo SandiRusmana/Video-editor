@@ -1,0 +1,145 @@
+.media-library {
+  width: 240px;
+  background: #14162a;
+  border-right: 1px solid #262a45;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.media-library__header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.media-library__header h3 {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #8b8fb3;
+  margin: 0;
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, #7c6cf0, #5b4fd1);
+  color: #fff;
+}
+
+.btn--sm {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.media-library__empty {
+  text-align: center;
+  color: #6b6f92;
+  font-size: 12px;
+  padding: 24px 8px;
+  border: 1px dashed #2c3050;
+  border-radius: 10px;
+}
+
+.media-library__empty p {
+  margin: 0 0 4px;
+  color: #9698c2;
+  font-weight: 600;
+}
+
+.media-library__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.media-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1b1e38;
+  border: 1px solid #2a2e50;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: grab;
+}
+
+.media-item:hover {
+  border-color: #5b4fd1;
+}
+
+.media-item__thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.media-item__thumb--video {
+  background: #2a3a63;
+}
+
+.media-item__thumb--audio {
+  background: #4a3420;
+}
+
+.media-item__thumb--image {
+  background: #2c4a35;
+}
+
+.media-item__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.media-item__name {
+  font-size: 12.5px;
+  color: #e4e5f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-item__duration {
+  font-size: 11px;
+  color: #6b6f92;
+}
+
+.media-item__add {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #2a2e50;
+  color: #cfd0ec;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.media-item__add:hover {
+  background: #5b4fd1;
+  color: #fff;
+}
