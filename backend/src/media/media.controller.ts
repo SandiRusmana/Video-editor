@@ -22,7 +22,7 @@ import { MediaService } from './media.service';
 export class MediaController {
   constructor(private mediaService: MediaService) { }
 
-  // POST /media/upload?projectId=xxx  (Acceptance 8)
+  // POST /media/upload?projectId=xxx
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -33,7 +33,7 @@ export class MediaController {
           cb(null, `${unique}${extname(file.originalname)}`);
         },
       }),
-      limits: { fileSize: 500 * 1024 * 1024 }, // batas hard limit multer, validasi detail per-tipe ada di service
+      limits: { fileSize: 500 * 1024 * 1024 },
     }),
   )
   async upload(
@@ -47,15 +47,15 @@ export class MediaController {
     return this.mediaService.uploadAndSave(req.user.userId, projectId, file);
   }
 
-  // GET /media?projectId=xxx  (Acceptance 9)
+  // GET /media?projectId=xxx  — Media Library (Acceptance 2, 3, 4)
   @Get()
-  findAll(@Query('projectId') projectId: string) {
+  findAll(@Req() req, @Query('projectId') projectId: string) {
     if (!projectId) throw new BadRequestException('projectId wajib diisi');
-    return this.mediaService.findAllForProject(projectId);
+    return this.mediaService.findAllForProject(req.user.userId, projectId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.mediaService.remove(id);
+  remove(@Req() req, @Param('id') id: string) {
+    return this.mediaService.remove(req.user.userId, id);
   }
 }
