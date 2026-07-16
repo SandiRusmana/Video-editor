@@ -1,45 +1,175 @@
 import { useRef, useEffect } from "react";
 import "./CanvasPreview.css";
 
-// Video sample publik dari MDN (dummy buat demo doang — nanti diganti file asli dari backend)
-const SAMPLE_VIDEO_URL =
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-
 function formatTime(sec) {
   const m = Math.floor(sec / 60).toString().padStart(2, "0");
   const s = Math.floor(sec % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 }
 
-export default function CanvasPreview({ currentTime, totalDuration, isPlaying, onTogglePlay, onSeek }) {
+export default function CanvasPreview({ currentTime, totalDuration, isPlaying, onTogglePlay, onSeek, clips = [] }) {
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
 
-  // Sinkronkan Play/Pause tombol custom kita dengan elemen <video> asli
+  // Cari clip yang aktif berdasarkan posisi playhead saat ini (hanya video/image)
+  const activeClip = clips.find(
+    (c) => c.trackType !== "AUDIO" && currentTime >= c.timelineStart && currentTime < c.timelineStart + c.duration
+  ) ?? (clips.find((c) => c.trackType !== "AUDIO") || null);
+
+  const isVideo = activeClip?.type === "video";
+  const isImage = activeClip?.type === "image";
+  const src = activeClip?.url ?? null;
+
+  // Cari clip audio yang aktif pada playhead saat ini
+  const activeAudioClip = clips.find(
+    (c) => c.trackType === "AUDIO" && currentTime >= c.timelineStart && currentTime < c.timelineStart + c.duration
+  );
+  const audioSrc = activeAudioClip?.url ?? null;
+
+  // Handler klik tombol Play/Pause
+  const handleTogglePlay = () => {
+    // Serahkan perubahan state ke parent component.
+    onTogglePlay();
+  };
+
+  // 1. VIDEO: Sinkronisasi Status Play/Pause
   useEffect(() => {
     const videoEl = videoRef.current;
-    if (!videoEl) return;
+    if (!videoEl || !src || !isVideo) return;
     if (isPlaying) {
-      videoEl.play().catch(() => {}); // catch: browser kadang block autoplay
+      if (videoEl.readyState > 0) {
+        videoEl.play().catch((err) => console.log("Autoplay blocked or interrupted:", err));
+      }
     } else {
       videoEl.pause();
     }
-  }, [isPlaying]);
+  }, [src, isPlaying, isVideo]);
 
-  // Playhead di timeline digeser/di-drag -> lompatkan posisi video mengikuti
-  // (video sample durasinya beda dari totalDuration timeline, jadi di-mod supaya gak error)
+  // 2. VIDEO: Sinkronisasi Posisi Waktu
   useEffect(() => {
     const videoEl = videoRef.current;
-    if (!videoEl || !videoEl.duration) return;
-    const target = currentTime % videoEl.duration;
-    if (Math.abs(videoEl.currentTime - target) > 0.3) {
-      videoEl.currentTime = target;
-    }
-  }, [currentTime]);
+    if (!videoEl || !src || !activeClip || !isVideo) return;
+    if (videoEl.readyState === 0) return;
 
-  // Video jalan sendiri (playing) -> playhead di timeline ikut bergerak
-  const handleTimeUpdate = (e) => {
-    if (isPlaying) onSeek(e.target.currentTime);
+    const clipOffset = Math.max(0, currentTime - activeClip.timelineStart);
+    const targetInFile = (activeClip.trimStart ?? 0) + clipOffset;
+
+    if (Math.abs(videoEl.currentTime - targetInFile) > 0.3) {
+      videoEl.currentTime = targetInFile;
+    }
+  }, [currentTime, src, activeClip, isVideo]);
+
+  // 3. AUDIO: Sinkronisasi Terpusat (Play/Pause & Pemuatan Ulang Aset)
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl || !audioSrc || !activeAudioClip) return;
+    if (audioEl.readyState === 0) return;
+
+    const clipOffset = Math.max(0, currentTime - activeAudioClip.timelineStart);
+    const targetInFile = (activeAudioClip.trimStart ?? 0) + clipOffset;
+
+    if (isPlaying) {
+      if (audioEl.paused) {
+        // Nyalakan audio: Samakan posisi tepat sebelum berputar
+        if (Math.abs(audioEl.currentTime - targetInFile) > 0.05) {
+          audioEl.currentTime = targetInFile;
+        }
+        audioEl.play().catch((err) => console.log("Audio play failed:", err));
+      }
+    } else {
+      // Matikan audio: Instan tanpa interupsi seaking
+      if (!audioEl.paused) {
+        audioEl.pause();
+      }
+    }
+    // CATATAN: 'currentTime' SENGAJA dibuang dari dependency array di bawah ini
+    // agar audio tidak dipaksa lompat-lompat setiap milidetik saat lagu sedang berjalan.
+  }, [isPlaying, audioSrc, activeAudioClip]);
+
+  // 4. AUDIO SCRUBBING: Sinkronisasi Waktu HANYA saat aplikasi sedang di-Pause
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (isPlaying || !audioEl || !audioSrc || !activeAudioClip) return;
+    if (audioEl.readyState === 0) return;
+
+    const clipOffset = Math.max(0, currentTime - activeAudioClip.timelineStart);
+    const targetInFile = (activeAudioClip.trimStart ?? 0) + clipOffset;
+
+    // Hanya ubah posisi audio jika pengguna menggeser timeline manual saat video berhenti
+    if (Math.abs(audioEl.currentTime - targetInFile) > 0.1) {
+      audioEl.currentTime = targetInFile;
+    }
+  }, [currentTime, isPlaying, audioSrc, activeAudioClip]);
+
+  // Eksekusi ketika file video selesai memuat metadata
+  const handleLoadedMetadata = (e) => {
+    const videoEl = e.target;
+    if (!activeClip || !isVideo) return;
+
+    const clipOffset = Math.max(0, currentTime - activeClip.timelineStart);
+    const targetInFile = (activeClip.trimStart ?? 0) + clipOffset;
+
+    videoEl.currentTime = targetInFile;
+    if (isPlaying) {
+      videoEl.play().catch((err) => console.log("Autoplay on load failed:", err));
+    }
   };
+
+  // Eksekusi ketika file audio selesai memuat metadata
+  const handleAudioLoadedMetadata = (e) => {
+    const audioEl = e.target;
+    if (!activeAudioClip) return;
+
+    const clipOffset = Math.max(0, currentTime - activeAudioClip.timelineStart);
+    const targetInFile = (activeAudioClip.trimStart ?? 0) + clipOffset;
+
+    audioEl.currentTime = targetInFile;
+    if (isPlaying && audioEl.paused) {
+      audioEl.play().catch((err) => console.log("Audio autoplay on load failed:", err));
+    }
+  };
+
+  // Video berjalan sendiri -> update playhead di timeline
+  const handleTimeUpdate = (e) => {
+    if (e.target.seeking) return;
+    if (!isPlaying || !activeClip || !isVideo) return;
+    const clipOffset = e.target.currentTime - (activeClip.trimStart ?? 0);
+    const newTime = activeClip.timelineStart + Math.max(0, clipOffset);
+
+    if (newTime <= totalDuration) {
+      onSeek(newTime);
+    } else {
+      onTogglePlay();
+    }
+  };
+
+  // LOOP DRIVER UNTUK SELAIN VIDEO (Gambar / Area Kosong / Hanya Audio)
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (isVideo) return;
+
+    let lastTime = performance.now();
+    let frameId;
+
+    const tick = (now) => {
+      const elapsed = (now - lastTime) / 1000;
+      lastTime = now;
+
+      onSeek((prev) => {
+        const nextTime = prev + elapsed;
+        if (nextTime >= totalDuration) {
+          onTogglePlay();
+          return totalDuration;
+        }
+        return nextTime;
+      });
+
+      frameId = requestAnimationFrame(tick);
+    };
+
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [isPlaying, isVideo, totalDuration, onSeek, onTogglePlay]);
 
   return (
     <section className="canvas-preview">
@@ -48,25 +178,45 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
       </div>
 
       <div className="canvas-preview__stage">
-        {totalDuration > 0 ? (
-          <video
-            ref={videoRef}
-            className="canvas-preview__video"
-            src={SAMPLE_VIDEO_URL}
-            loop
-            muted
-            playsInline
-            onTimeUpdate={handleTimeUpdate}
-          />
+        {src ? (
+          isVideo ? (
+            <video
+              ref={videoRef}
+              className="canvas-preview__video"
+              src={src}
+              playsInline
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+            />
+          ) : isImage ? (
+            <img
+              className="canvas-preview__image"
+              src={src}
+              alt={activeClip.name}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+          ) : (
+            <span className="canvas-preview__placeholder canvas-preview__placeholder--muted">
+              Format tidak didukung
+            </span>
+          )
         ) : (
           <span className="canvas-preview__placeholder canvas-preview__placeholder--muted">
-            Belum ada clip untuk ditampilkan
+            {totalDuration > 0 ? "Pilih clip untuk diputar" : "Belum ada clip untuk ditampilkan"}
           </span>
         )}
+
+        <audio
+          ref={audioRef}
+          src={audioSrc || ""}
+          preload="auto"
+          style={{ display: "none" }}
+          onLoadedMetadata={handleAudioLoadedMetadata}
+        />
       </div>
 
       <div className="canvas-preview__controls">
-        <button className="btn btn--primary btn--sm" onClick={onTogglePlay}>
+        <button className="btn btn--primary btn--sm" onClick={handleTogglePlay}>
           {isPlaying ? "Pause" : "Play"}
         </button>
         <span className="canvas-preview__time">

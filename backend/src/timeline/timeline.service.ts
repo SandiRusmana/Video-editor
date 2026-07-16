@@ -46,7 +46,8 @@ export class TimelineService {
           orderBy: { timelineStart: 'asc' },
           include: {
             media: {
-              select: { id: true, name: true, type: true, duration: true, thumbnail: true },
+              // tambah field path supaya frontend tahu URL file aslinya
+              select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
             },
           },
         },
@@ -94,9 +95,61 @@ export class TimelineService {
       },
       include: {
         media: {
-          select: { id: true, name: true, type: true, duration: true, thumbnail: true },
+          select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
         },
       },
     });
+  }
+
+  // Hapus clip dari timeline berdasarkan clipId — pastikan clip memang milik
+  // project yang sama (lewat track.projectId) supaya tidak bisa hapus clip orang lain.
+  async deleteClip(userId: string, projectId: string, clipId: string) {
+    await this.assertProjectOwnership(userId, projectId);
+
+    const clip = await this.prisma.clip.findUnique({
+      where: { id: clipId },
+      include: { track: { select: { projectId: true } } },
+    });
+    if (!clip) throw new NotFoundException('Clip tidak ditemukan');
+    if (clip.track.projectId !== projectId) {
+      throw new ForbiddenException('Clip ini bukan bagian dari project yang dimaksud');
+    }
+
+    await this.prisma.clip.delete({ where: { id: clipId } });
+    return { message: 'Clip berhasil dihapus' };
+  }
+
+  // Story 8: Urutkan dan update timelineStart secara berurutan agar tidak nimpa (magnetic)
+  async reorderClips(userId: string, projectId: string, clipIds: string[]) {
+    await this.assertProjectOwnership(userId, projectId);
+
+    // Ambil HANYA clip yang benar-benar ada di project ini (filter by clipIds juga)
+    const clips = await this.prisma.clip.findMany({
+      where: {
+        id: { in: clipIds },      // hanya proses clipId yang dikirim frontend
+        track: { projectId },     // pastikan clip memang milik project ini
+      },
+    });
+
+    // Buat map id -> clip agar lookup O(1)
+    const clipMap = new Map(clips.map((c) => [c.id, c]));
+
+    let currentStart = 0;
+    for (const id of clipIds) {
+      const clip = clipMap.get(id);
+      if (!clip) continue; // clip sudah dihapus atau tidak valid, lewati saja
+
+      const duration = clip.outPoint - clip.inPoint;
+
+      // updateMany tidak throw P2025 jika record tidak ditemukan (aman dari race condition)
+      await this.prisma.clip.updateMany({
+        where: { id, track: { projectId } },
+        data: { timelineStart: currentStart },
+      });
+
+      currentStart += duration;
+    }
+
+    return { message: 'Urutan clip berhasil diperbarui' };
   }
 }

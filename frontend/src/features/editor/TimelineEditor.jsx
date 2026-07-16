@@ -8,7 +8,6 @@ function formatTime(sec) {
   return `${m}:${s}`;
 }
 
-// Tanda waktu di ruler (0s, 10s, 20s, ...)
 function buildRuler(totalDuration) {
   const step = 10;
   const marks = [];
@@ -23,9 +22,9 @@ function TrimHandle({ side, onDragStart }) {
     <div
       className={`clip__handle clip__handle--${side}`}
       draggable
-      onDragStart={(e) => e.preventDefault()} // matikan drag native bawaan browser di handle ini
+      onDragStart={(e) => e.preventDefault()}
       onMouseDown={(e) => {
-        e.stopPropagation(); // supaya gak ke-trigger select clip / drag reorder clip
+        e.stopPropagation();
         onDragStart(e, side);
       }}
     />
@@ -60,18 +59,22 @@ function Playhead({ currentTime, totalDuration, onSeek }) {
     [currentTime, totalDuration, onSeek]
   );
 
+  // Ditambahkan offset 80px agar sejajar dengan posisi awal lane
+  const playheadLeft = 80 + currentTime * PIXELS_PER_SECOND;
+
   return (
     <div
       className="playhead"
-      style={{ left: currentTime * PIXELS_PER_SECOND }}
+      style={{ left: playheadLeft }}
       onMouseDown={handleDragStart}
     >
       <div className="playhead__handle" />
+      <div className="playhead__line" />
     </div>
   );
 }
 
-function Clip({ clip, isSelected, onSelect, onTrim }) {
+function Clip({ clip, isSelected, onSelect, onTrim, onDelete }) {
   const dragRef = useRef(null);
 
   const handleDragStart = useCallback(
@@ -113,13 +116,23 @@ function Clip({ clip, isSelected, onSelect, onTrim }) {
         e.dataTransfer.effectAllowed = "move";
       }}
       onClick={(e) => {
-        e.stopPropagation(); // biar gak ke-bubble ke onDeselect di parent track
+        e.stopPropagation();
         onSelect(clip.id);
       }}
     >
       <TrimHandle side="left" onDragStart={handleDragStart} />
       <span className="clip__label">{clip.name}</span>
       <span className="clip__duration">{formatTime(clip.duration)}</span>
+      <button
+        className="clip__delete"
+        title="Hapus clip dari timeline"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(clip.id);
+        }}
+      >
+        ✕
+      </button>
       <TrimHandle side="right" onDragStart={handleDragStart} />
     </div>
   );
@@ -136,42 +149,46 @@ export default function TimelineEditor({
   onSeek,
   onDropMedia,
   onReorderClip,
+  onDeleteClip,
 }) {
   const ruler = buildRuler(Math.max(totalDuration, 40));
-  const laneRef = useRef(null);
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragOverTrack, setDragOverTrack] = useState(null); // 'VIDEO' | 'AUDIO' | 'EMPTY' | null
 
-  // Klik di area kosong lane (bukan di atas clip) -> pindahkan playhead ke posisi itu
+  const videoClips = clips.filter((c) => c.trackType === "VIDEO");
+  const audioClips = clips.filter((c) => c.trackType === "AUDIO");
+
+  // Ditambah offset 80px dari lebar label kolom kiri
+  const timelineWidth = 80 + Math.max(totalDuration, 40) * PIXELS_PER_SECOND;
+
   const handleLaneClick = (e) => {
     onDeselect();
-    if (!laneRef.current) return;
-    const rect = laneRef.current.getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const newTime = Math.max(0, Math.min(totalDuration, clickX / PIXELS_PER_SECOND));
     onSeek(newTime);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault(); // wajib, biar event "drop" diizinkan browser
+  const handleDragOver = (e, trackType) => {
+    e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
-    setIsDragOver(true);
+    setDragOverTrack(trackType);
   };
 
-  const handleDragLeave = () => setIsDragOver(false);
+  const handleDragLeave = () => setDragOverTrack(null);
 
-  const handleDrop = (e) => {
+  const handleDrop = (e, trackType) => {
     e.preventDefault();
-    setIsDragOver(false);
+    setDragOverTrack(null);
 
     const clipId = e.dataTransfer.getData("clipId");
     if (clipId) {
-      // Reorder: cari index tujuan berdasarkan posisi X drop, dibanding titik tengah tiap clip
-      if (!laneRef.current) return;
-      const rect = laneRef.current.getBoundingClientRect();
+      const rect = e.currentTarget.getBoundingClientRect();
       const dropX = e.clientX - rect.left;
-      let targetIndex = clips.length;
-      for (let i = 0; i < clips.length; i++) {
-        const midpoint = clips[i].left + clips[i].width / 2;
+      
+      const trackClips = trackType === "VIDEO" ? videoClips : audioClips;
+      let targetIndex = trackClips.length;
+      for (let i = 0; i < trackClips.length; i++) {
+        const midpoint = trackClips[i].left + trackClips[i].width / 2;
         if (dropX < midpoint) {
           targetIndex = i;
           break;
@@ -192,50 +209,85 @@ export default function TimelineEditor({
         <span className="timeline-editor__total">{formatTime(totalDuration)} total</span>
       </div>
 
-      <div className="timeline-editor__ruler">
-        {ruler.map((t) => (
-          <span key={t} className="timeline-editor__mark" style={{ left: t * PIXELS_PER_SECOND }}>
-            {t}s
-          </span>
-        ))}
-      </div>
-
-      {clips.length === 0 ? (
-        <div
-          className={`timeline-editor__empty ${isDragOver ? "timeline-editor__empty--drag" : ""}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {isDragOver
-            ? "Lepaskan di sini untuk menambahkan ke Track 1"
-            : "Belum ada klip di timeline — unggah media untuk mulai mengedit, atau seret dari Media Library"}
-        </div>
-      ) : (
-        <div className="timeline-editor__track">
-          <span className="timeline-editor__track-label">Track 1</span>
-          <div
-            className="timeline-editor__lane"
-            ref={laneRef}
-            onClick={handleLaneClick}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {clips.map((clip) => (
-              <Clip
-                key={clip.id}
-                clip={clip}
-                isSelected={clip.id === selectedClipId}
-                onSelect={onSelectClip}
-                onTrim={onTrimClip}
-              />
+      <div className="timeline-editor__viewport">
+        <div className="timeline-editor__content-wrapper" style={{ width: timelineWidth }}>
+          
+          <div className="timeline-editor__ruler">
+            {ruler.map((t) => (
+              <span key={t} className="timeline-editor__mark" style={{ left: 80 + t * PIXELS_PER_SECOND }}>
+                {t}s
+              </span>
             ))}
-            <Playhead currentTime={currentTime} totalDuration={totalDuration} onSeek={onSeek} />
-            {isDragOver && <div className="timeline-editor__drop-hint">Drop file di sini</div>}
           </div>
+
+          {clips.length === 0 ? (
+            <div
+              className={`timeline-editor__empty ${dragOverTrack === "EMPTY" ? "timeline-editor__empty--drag" : ""}`}
+              onDragOver={(e) => handleDragOver(e, "EMPTY")}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, "VIDEO")}
+              style={{ marginLeft: "80px" }}
+            >
+              {dragOverTrack === "EMPTY"
+                ? "Lepaskan di sini untuk menambahkan"
+                : "Belum ada klip di timeline — unggah media untuk mulai mengedit, atau seret dari Media Library"}
+            </div>
+          ) : (
+            <div className="timeline-editor__tracks-container">
+              {/* TRACK VIDEO */}
+              <div className="timeline-editor__track">
+                <span className="timeline-editor__track-label">Video Track</span>
+                <div
+                  className={`timeline-editor__lane ${dragOverTrack === "VIDEO" ? "timeline-editor__lane--drag-over" : ""}`}
+                  onClick={handleLaneClick}
+                  onDragOver={(e) => handleDragOver(e, "VIDEO")}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, "VIDEO")}
+                >
+                  {videoClips.map((clip) => (
+                    <Clip
+                      key={clip.id}
+                      clip={clip}
+                      isSelected={clip.id === selectedClipId}
+                      onSelect={onSelectClip}
+                      onTrim={onTrimClip}
+                      onDelete={onDeleteClip}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* TRACK AUDIO */}
+              <div className="timeline-editor__track">
+                <span className="timeline-editor__track-label">Audio Track</span>
+                <div
+                  className={`timeline-editor__lane ${dragOverTrack === "AUDIO" ? "timeline-editor__lane--drag-over" : ""}`}
+                  onClick={handleLaneClick}
+                  onDragOver={(e) => handleDragOver(e, "AUDIO")}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, "AUDIO")}
+                >
+                  {audioClips.map((clip) => (
+                    <Clip
+                      key={clip.id}
+                      clip={clip}
+                      isSelected={clip.id === selectedClipId}
+                      onSelect={onSelectClip}
+                      onTrim={onTrimClip}
+                      onDelete={onDeleteClip}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {clips.length > 0 && (
+            <Playhead currentTime={currentTime} totalDuration={totalDuration} onSeek={onSeek} />
+          )}
+
         </div>
-      )}
+      </div>
     </section>
   );
 }
