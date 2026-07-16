@@ -3,6 +3,8 @@ import "./dashboard.css";
 // Sesuaikan nama file logo dengan yang ada di folder assets kamu
 import logo from "../../assets/logo.png";
 
+const API_BASE = "http://localhost:3000";
+
 function IconFolder() {
   return (
     <svg
@@ -126,24 +128,67 @@ function IconDelete() {
   );
 }
 
+// Helper kecil supaya tiap fetch ke backend otomatis bawa token,
+// dan melempar error yang jelas kalau responsnya gagal.
+async function apiFetch(path, options = {}) {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || `Request gagal (${res.status})`);
+  }
+  return data;
+}
+
+// Format tanggal ISO dari backend (createdAt) jadi dd-mm-yy sesuai tampilan lama
+function formatTanggal(isoString) {
+  const d = new Date(isoString);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+}
+
 export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProject }) {
-  const [projects, setProjects] = useState([]); // kosong dulu, nanti diisi dari API backend
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
   const [activeMenuId, setActiveMenuId] = useState(null);
   const menuRef = useRef(null);
 
-  // Kalau App.jsx belum kasih logo custom, pakai logo default dari assets
   const sumberLogo = logoUser || logo;
-
-  // Ambil huruf pertama nama user buat avatar bulat
   const inisialUser = namaUser.trim().charAt(0).toUpperCase();
 
-  // Contoh nanti kalau backend sudah jadi, tinggal aktifkan ini:
-  // useEffect(() => {
-  //   fetch("/api/projects")
-  //     .then((res) => res.json())
-  //     .then((data) => setProjects(data))
-  //     .catch((err) => console.error("Gagal ambil data project:", err));
-  // }, []);
+  // Ambil daftar project milik user yang login, sekali saat halaman dibuka.
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadProjects() {
+      setLoading(true);
+      setErrorMsg("");
+      try {
+        const data = await apiFetch("/projects");
+        if (isMounted) setProjects(data);
+      } catch (err) {
+        if (isMounted) setErrorMsg(err.message || "Gagal memuat daftar project");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadProjects();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -159,33 +204,48 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
     setActiveMenuId((prev) => (prev === id ? null : id));
   };
 
-  const handleRename = (id) => {
+  const handleRename = async (id) => {
     const project = projects.find((p) => p.id === id);
     const newName = window.prompt("Ganti nama project:", project?.name || "");
-    if (newName && newName.trim()) {
-      setProjects((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, name: newName.trim() } : p)),
-      );
+    setActiveMenuId(null);
+    if (!newName || !newName.trim()) return;
+
+    try {
+      const updated = await apiFetch(`/projects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    } catch (err) {
+      alert(err.message || "Gagal mengubah nama project");
     }
-    setActiveMenuId(null);
   };
 
-  const handleDelete = (id) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id));
+  const handleDelete = async (id) => {
     setActiveMenuId(null);
+    const confirmDelete = window.confirm("Yakin ingin menghapus project ini?");
+    if (!confirmDelete) return;
+
+    try {
+      await apiFetch(`/projects/${id}`, { method: "DELETE" });
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      alert(err.message || "Gagal menghapus project");
+    }
   };
 
-  const handleNewProject = () => {
+  const handleNewProject = async () => {
     const name = window.prompt("Nama project baru:");
-    if (name && name.trim()) {
-      const today = new Date();
-      const dd = String(today.getDate()).padStart(2, "0");
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const yy = String(today.getFullYear()).slice(-2);
-      setProjects((prev) => [
-        ...prev,
-        { id: Date.now(), name: name.trim(), createdAt: `${dd}-${mm}-${yy}` },
-      ]);
+    if (!name || !name.trim()) return;
+
+    try {
+      const newProject = await apiFetch("/projects", {
+        method: "POST",
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      setProjects((prev) => [...prev, newProject]);
+    } catch (err) {
+      alert(err.message || "Gagal membuat project baru");
     }
   };
 
@@ -225,81 +285,93 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
         <main className="main-content">
           <h1 className="page-title">My projects</h1>
 
-          <div className="project-grid">
-            {/* New project card */}
-            <button
-              className="project-card new-project-card"
-              onClick={handleNewProject}
-            >
-              <IconPlus />
-              <span>New project</span>
-            </button>
+          {loading && <p className="empty-state">Memuat daftar project...</p>}
 
-            {/* Pesan kalau belum ada project */}
-            {projects.length === 0 && (
-              <p className="empty-state">
-                Belum ada project. Klik "New project" untuk mulai.
-              </p>
-            )}
+          {!loading && errorMsg && (
+            <p className="empty-state" style={{ color: "#ff6b6b" }}>
+              {errorMsg}
+            </p>
+          )}
 
-            {/* Project cards */}
-            {projects.map((project) => (
-              <div className="project-card existing-card" key={project.id}>
-                <div
-                  className="card-thumb"
-                  onClick={() => onBukaProject && onBukaProject(project.id, project.name)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <IconClapper />
+          {!loading && !errorMsg && (
+            <div className="project-grid">
+              {/* New project card */}
+              <button
+                className="project-card new-project-card"
+                onClick={handleNewProject}
+              >
+                <IconPlus />
+                <span>New project</span>
+              </button>
+
+              {/* Pesan kalau belum ada project */}
+              {projects.length === 0 && (
+                <p className="empty-state">
+                  Belum ada project. Klik "New project" untuk mulai.
+                </p>
+              )}
+
+              {/* Project cards */}
+              {projects.map((project) => (
+                <div className="project-card existing-card" key={project.id}>
                   <div
-                    className="card-menu-wrap"
-                    ref={activeMenuId === project.id ? menuRef : null}
+                    className="card-thumb"
+                    onClick={() => onBukaProject && onBukaProject(project.id, project.name)}
+                    style={{ cursor: "pointer" }}
                   >
-                    <button
-                      className="dots-btn dots-btn-thumb"
-                      onClick={(e) => {
-                        e.stopPropagation(); // biar klik titik-tiga gak ikut buka project
-                        toggleMenu(project.id);
-                      }}
-                      aria-label="Opsi project"
+                    <IconClapper />
+                    <div
+                      className="card-menu-wrap"
+                      ref={activeMenuId === project.id ? menuRef : null}
                     >
-                      <IconDots />
-                    </button>
-                    {activeMenuId === project.id && (
-                      <div className="dropdown-menu">
-                        <button
-                          className="dropdown-item"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRename(project.id);
-                          }}
-                        >
-                          <IconRename />
-                          <span>Rename</span>
-                        </button>
-                        <button
-                          className="dropdown-item dropdown-item-danger"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(project.id);
-                          }}
-                        >
-                          <IconDelete />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    )}
+                      <button
+                        className="dots-btn dots-btn-thumb"
+                        onClick={(e) => {
+                          e.stopPropagation(); // biar klik titik-tiga gak ikut buka project
+                          toggleMenu(project.id);
+                        }}
+                        aria-label="Opsi project"
+                      >
+                        <IconDots />
+                      </button>
+                      {activeMenuId === project.id && (
+                        <div className="dropdown-menu">
+                          <button
+                            className="dropdown-item"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRename(project.id);
+                            }}
+                          >
+                            <IconRename />
+                            <span>Rename</span>
+                          </button>
+                          <button
+                            className="dropdown-item dropdown-item-danger"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(project.id);
+                            }}
+                          >
+                            <IconDelete />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="card-info">
+                    <div className="card-info-text">
+                      <p className="card-title">{project.name}</p>
+                      <p className="card-subtitle">
+                        Dibuat: {formatTanggal(project.createdAt)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="card-info">
-                  <div className="card-info-text">
-                    <p className="card-title">{project.name}</p>
-                    <p className="card-subtitle">Dibuat: {project.createdAt}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </main>
       </div>
     </div>

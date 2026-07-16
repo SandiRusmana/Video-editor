@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import "./MediaLibrary.css";
 
 function formatDuration(sec) {
@@ -12,12 +13,38 @@ const ICONS = {
   image: "🖼️",
 };
 
-export default function MediaLibrary({ mediaList, onAddToTimeline }) {
+export default function MediaLibrary({ mediaList, onAddToTimeline, onUploadMedia }) {
+  const fileInputRef = useRef(null);
+
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file && onUploadMedia) {
+      onUploadMedia(file);
+      // Reset value agar file yang sama bisa di-upload ulang jika dibutuhkan
+      e.target.value = "";
+    }
+  };
+
   return (
     <aside className="media-library">
       <div className="media-library__header">
         <h3>MEDIA LIBRARY</h3>
-        <button className="btn btn--primary btn--sm">+ Upload Media</button>
+        <button className="btn btn--primary btn--sm" onClick={handleUploadClick}>
+          + Upload Media
+        </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept="video/*,audio/*,image/*"
+          style={{ display: "none" }}
+        />
       </div>
 
       {mediaList.length === 0 ? (

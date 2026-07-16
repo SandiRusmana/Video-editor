@@ -20,12 +20,14 @@ export default function ProjectEditor({
     deselectClip,
     updateClipTrim,
     addClipToTimeline,
+    deleteClip,
     reorderClip,
     currentTime,
     setCurrentTime,
     isPlaying,
     setIsPlaying,
-  } = useEditorState();
+    uploadMedia,
+  } = useEditorState(projectId);
 
   const [projectName, setProjectName] = useState(initialProjectName || "Konten YouTube");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -89,13 +91,18 @@ export default function ProjectEditor({
       </header>
 
       <div className="project-editor__body">
-        <MediaLibrary mediaList={mediaLibrary} onAddToTimeline={addClipToTimeline} />
+        <MediaLibrary
+          mediaList={mediaLibrary}
+          onAddToTimeline={addClipToTimeline}
+          onUploadMedia={uploadMedia}
+        />
         <CanvasPreview
           currentTime={currentTime}
           totalDuration={totalDuration}
           isPlaying={isPlaying}
           onTogglePlay={() => setIsPlaying((p) => !p)}
           onSeek={setCurrentTime}
+          clips={clips}
         />
         <PropertiesPanel clip={selectedClip} onUpdateTrim={updateClipTrim} />
       </div>
@@ -111,6 +118,7 @@ export default function ProjectEditor({
         onSeek={setCurrentTime}
         onDropMedia={handleDropMedia}
         onReorderClip={reorderClip}
+        onDeleteClip={deleteClip}
       />
     </div>
   );

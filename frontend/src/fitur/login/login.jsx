@@ -31,13 +31,12 @@ function Login({ onLoginBerhasil, onPindahKeRegister }) {
         throw new Error(data.message || "Gagal masuk");
       }
 
-      alert("Berhasil masuk! Token: " + (data.access_token || data.token || "Berhasil"));
-      // TODO: Simpan token ke localStorage dan arahkan ke dashboard
-      // localStorage.setItem("token", data.access_token);
-      
-      // Memanggil fungsi operan agar pindah ke halaman dashboard
+      // Simpan token supaya bisa dipakai di request API selanjutnya (misal ambil daftar project)
+      localStorage.setItem("token", data.access_token);
+
+      // Pindah ke halaman dashboard
       onLoginBerhasil();
-      
+
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
@@ -60,13 +59,13 @@ function Login({ onLoginBerhasil, onPindahKeRegister }) {
             <form className="form-login" onSubmit={handleSubmit}>
               <div className="input-group">
                 <label htmlFor="email">Alamat Email</label>
-                <input 
-                  type="email" 
-                  id="email" 
+                <input
+                  type="email"
+                  id="email"
                   placeholder="Email@email.com"
                   value={formData.email}
                   onChange={handleChange}
-                  required 
+                  required
                 />
               </div>
 
@@ -88,7 +87,7 @@ function Login({ onLoginBerhasil, onPindahKeRegister }) {
             </form>
 
             <p className="footer-login">
-              Belum punya akun? <b onClick={onPindahKeRegister} style={{cursor: "pointer"}}>Daftar</b>
+              Belum punya akun? <b onClick={onPindahKeRegister} style={{ cursor: "pointer" }}>Daftar</b>
             </p>
           </div>
         </div>

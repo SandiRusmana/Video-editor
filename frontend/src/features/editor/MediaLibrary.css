@@ -7,6 +7,25 @@
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2e50 #14162a;
+}
+
+.media-library::-webkit-scrollbar {
+  width: 6px;
+}
+
+.media-library::-webkit-scrollbar-track {
+  background: #14162a;
+}
+
+.media-library::-webkit-scrollbar-thumb {
+  background: #2a2e50;
+  border-radius: 3px;
+}
+
+.media-library::-webkit-scrollbar-thumb:hover {
+  background: #5b4fd1;
 }
 
 .media-library__header {
