@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import "./dashboard.css";
 // Sesuaikan nama file logo dengan yang ada di folder assets kamu
 import logo from "../../assets/logo.png";
+import MediaPage from "./MediaPage";
+import SettingsPage from "./SettingsPage";
 
 const API_BASE = "http://localhost:3000";
 
@@ -158,6 +160,7 @@ function formatTanggal(isoString) {
 }
 
 export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProject }) {
+  const [activeTab, setActiveTab] = useState("projects"); // "projects" | "media" | "settings"
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -266,15 +269,24 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
         {/* Sidebar */}
         <aside className="sidebar">
           <nav className="nav-list">
-            <button className="nav-item nav-item-active">
+            <button
+              className={`nav-item ${activeTab === "projects" ? "nav-item-active" : ""}`}
+              onClick={() => setActiveTab("projects")}
+            >
               <IconFolder />
               <span>Projects</span>
             </button>
-            <button className="nav-item">
+            <button
+              className={`nav-item ${activeTab === "media" ? "nav-item-active" : ""}`}
+              onClick={() => setActiveTab("media")}
+            >
               <IconMedia />
               <span>Media</span>
             </button>
-            <button className="nav-item">
+            <button
+              className={`nav-item ${activeTab === "settings" ? "nav-item-active" : ""}`}
+              onClick={() => setActiveTab("settings")}
+            >
               <IconSettings />
               <span>Settings</span>
             </button>
@@ -282,97 +294,102 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
         </aside>
 
         {/* Main content */}
-        <main className="main-content">
-          <h1 className="page-title">My projects</h1>
+        {activeTab === "projects" && (
+          <main className="main-content">
+            <h1 className="page-title">My projects</h1>
 
-          {loading && <p className="empty-state">Memuat daftar project...</p>}
+            {loading && <p className="empty-state">Memuat daftar project...</p>}
 
-          {!loading && errorMsg && (
-            <p className="empty-state" style={{ color: "#ff6b6b" }}>
-              {errorMsg}
-            </p>
-          )}
+            {!loading && errorMsg && (
+              <p className="empty-state" style={{ color: "#ff6b6b" }}>
+                {errorMsg}
+              </p>
+            )}
 
-          {!loading && !errorMsg && (
-            <div className="project-grid">
-              {/* New project card */}
-              <button
-                className="project-card new-project-card"
-                onClick={handleNewProject}
-              >
-                <IconPlus />
-                <span>New project</span>
-              </button>
+            {!loading && !errorMsg && (
+              <div className="project-grid">
+                {/* New project card */}
+                <button
+                  className="project-card new-project-card"
+                  onClick={handleNewProject}
+                >
+                  <IconPlus />
+                  <span>New project</span>
+                </button>
 
-              {/* Pesan kalau belum ada project */}
-              {projects.length === 0 && (
-                <p className="empty-state">
-                  Belum ada project. Klik "New project" untuk mulai.
-                </p>
-              )}
+                {/* Pesan kalau belum ada project */}
+                {projects.length === 0 && (
+                  <p className="empty-state">
+                    Belum ada project. Klik "New project" untuk mulai.
+                  </p>
+                )}
 
-              {/* Project cards */}
-              {projects.map((project) => (
-                <div className="project-card existing-card" key={project.id}>
-                  <div
-                    className="card-thumb"
-                    onClick={() => onBukaProject && onBukaProject(project.id, project.name)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <IconClapper />
+                {/* Project cards */}
+                {projects.map((project) => (
+                  <div className="project-card existing-card" key={project.id}>
                     <div
-                      className="card-menu-wrap"
-                      ref={activeMenuId === project.id ? menuRef : null}
+                      className="card-thumb"
+                      onClick={() => onBukaProject && onBukaProject(project.id, project.name)}
+                      style={{ cursor: "pointer" }}
                     >
-                      <button
-                        className="dots-btn dots-btn-thumb"
-                        onClick={(e) => {
-                          e.stopPropagation(); // biar klik titik-tiga gak ikut buka project
-                          toggleMenu(project.id);
-                        }}
-                        aria-label="Opsi project"
+                      <IconClapper />
+                      <div
+                        className="card-menu-wrap"
+                        ref={activeMenuId === project.id ? menuRef : null}
                       >
-                        <IconDots />
-                      </button>
-                      {activeMenuId === project.id && (
-                        <div className="dropdown-menu">
-                          <button
-                            className="dropdown-item"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRename(project.id);
-                            }}
-                          >
-                            <IconRename />
-                            <span>Rename</span>
-                          </button>
-                          <button
-                            className="dropdown-item dropdown-item-danger"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(project.id);
-                            }}
-                          >
-                            <IconDelete />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      )}
+                        <button
+                          className="dots-btn dots-btn-thumb"
+                          onClick={(e) => {
+                            e.stopPropagation(); // biar klik titik-tiga gak ikut buka project
+                            toggleMenu(project.id);
+                          }}
+                          aria-label="Opsi project"
+                        >
+                          <IconDots />
+                        </button>
+                        {activeMenuId === project.id && (
+                          <div className="dropdown-menu">
+                            <button
+                              className="dropdown-item"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRename(project.id);
+                              }}
+                            >
+                              <IconRename />
+                              <span>Rename</span>
+                            </button>
+                            <button
+                              className="dropdown-item dropdown-item-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(project.id);
+                              }}
+                            >
+                              <IconDelete />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="card-info">
+                      <div className="card-info-text">
+                        <p className="card-title">{project.name}</p>
+                        <p className="card-subtitle">
+                          Dibuat: {formatTanggal(project.createdAt)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="card-info">
-                    <div className="card-info-text">
-                      <p className="card-title">{project.name}</p>
-                      <p className="card-subtitle">
-                        Dibuat: {formatTanggal(project.createdAt)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
+                ))}
+              </div>
+            )}
+          </main>
+        )}
+
+        {activeTab === "media" && <MediaPage />}
+        {activeTab === "settings" && <SettingsPage />}
       </div>
     </div>
   );
