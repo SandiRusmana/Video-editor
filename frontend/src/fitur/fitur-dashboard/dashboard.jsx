@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import "./dashboard.css";
 // Sesuaikan nama file logo dengan yang ada di folder assets kamu
 import logo from "../../assets/logo.png";
-import MediaPage from "./MediaPage.jsx";
+import MediaPage from "./MediaPage";
+import SettingsPage from "./SettingsPage";
 
 const API_BASE = "http://localhost:3000";
 
@@ -269,21 +270,21 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
         <aside className="sidebar">
           <nav className="nav-list">
             <button
-              className={`nav-item${activeTab === "projects" ? " nav-item-active" : ""}`}
+              className={`nav-item ${activeTab === "projects" ? "nav-item-active" : ""}`}
               onClick={() => setActiveTab("projects")}
             >
               <IconFolder />
               <span>Projects</span>
             </button>
             <button
-              className={`nav-item${activeTab === "media" ? " nav-item-active" : ""}`}
+              className={`nav-item ${activeTab === "media" ? "nav-item-active" : ""}`}
               onClick={() => setActiveTab("media")}
             >
               <IconMedia />
               <span>Media</span>
             </button>
             <button
-              className={`nav-item${activeTab === "settings" ? " nav-item-active" : ""}`}
+              className={`nav-item ${activeTab === "settings" ? "nav-item-active" : ""}`}
               onClick={() => setActiveTab("settings")}
             >
               <IconSettings />
@@ -293,16 +294,7 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
         </aside>
 
         {/* Main content */}
-        {activeTab === "media" ? (
-          <MediaPage />
-        ) : activeTab === "settings" ? (
-          <main className="main-content">
-            <h1 className="page-title">Settings</h1>
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>
-              Pengaturan akan segera hadir.
-            </p>
-          </main>
-        ) : (
+        {activeTab === "projects" && (
           <main className="main-content">
             <h1 className="page-title">My projects</h1>
 
@@ -348,7 +340,7 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
                         <button
                           className="dots-btn dots-btn-thumb"
                           onClick={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation(); // biar klik titik-tiga gak ikut buka project
                             toggleMenu(project.id);
                           }}
                           aria-label="Opsi project"
@@ -395,6 +387,9 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
             )}
           </main>
         )}
+
+        {activeTab === "media" && <MediaPage />}
+        {activeTab === "settings" && <SettingsPage />}
       </div>
     </div>
   );

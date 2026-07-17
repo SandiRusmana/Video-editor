@@ -54,6 +54,7 @@ function IconGrid() {
   );
 }
 
+// List Icon matching mockup
 function IconList() {
   return (
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2">
@@ -68,6 +69,8 @@ function IconUpload() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
@@ -154,6 +157,7 @@ function UploadBox({ onUpload, uploading }) {
       </div>
       <span className="media-upload-box__label">
         {uploading ? "Mengunggah..." : "Upload Media"}
+        {uploading ? "Uploading..." : "Upload Media"}
       </span>
     </div>
   );
@@ -171,12 +175,26 @@ function VideoCard({ media, onDelete }) {
         )}
         {media.duration && (
           <span className="media-card__badge">{formatDuration(media.duration)}</span>
+  const thumbnailSrc = media.thumbnail ? (media.thumbnail.startsWith("http") ? media.thumbnail : `${API_BASE}${media.thumbnail}`) : null;
+  return (
+    <div className="media-card media-card--video">
+      <div className="media-card__thumb media-card__thumb--video">
+        {thumbnailSrc ? (
+          <img src={thumbnailSrc} alt={media.name} className="media-card__img" />
+        ) : (
+          <div className="video-placeholder-gradient">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.6 }}>
+              <rect x="2" y="6" width="15" height="12" rx="2" />
+              <path d="m17 10 5-3v10l-5-3V10z" />
+            </svg>
+          </div>
         )}
       </div>
       <div className="media-card__footer">
         <div style={{ flex: 1, minWidth: 0 }}>
           <span className="media-card__name" title={media.name}>{media.name}</span>
           {media.size && <div className="media-card__size">{formatSize(media.size)}</div>}
+          <span className="media-card__duration">{media.duration ? `${Math.round(media.duration)}s` : ""}</span>
         </div>
         <button className="media-card__del" onClick={() => onDelete(media.id)} title="Hapus">
           <IconTrash />
@@ -203,6 +221,20 @@ function AudioRow({ media, onDelete }) {
       <button className="audio-row__del" onClick={() => onDelete(media.id)} title="Hapus">
         <IconTrash />
       </button>
+      <div className="audio-row__left">
+        <div className="audio-row__icon">
+          <IconAudio />
+        </div>
+        <span className="audio-row__name" title={media.name}>{media.name}</span>
+      </div>
+      <div className="audio-row__right">
+        {media.duration && (
+          <span className="audio-row__dur">{media.duration ? `${Math.round(media.duration)}s` : ""}</span>
+        )}
+        <button className="audio-row__del" onClick={() => onDelete(media.id)} title="Hapus">
+          <IconTrash />
+        </button>
+      </div>
     </div>
   );
 }
@@ -216,12 +248,27 @@ function ImageCard({ media, onDelete }) {
           <img src={`${API_BASE}${media.thumbnail}`} alt={media.name} className="media-card__img" />
         ) : (
           <IconImage />
+  const thumbnailSrc = media.thumbnail ? (media.thumbnail.startsWith("http") ? media.thumbnail : `${API_BASE}${media.thumbnail}`) : null;
+  return (
+    <div className="media-card media-card--image">
+      <div className="media-card__thumb media-card__thumb--image">
+        {thumbnailSrc ? (
+          <img src={thumbnailSrc} alt={media.name} className="media-card__img" />
+        ) : (
+          <div className="image-placeholder-gradient">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.6 }}>
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 20" />
+            </svg>
+          </div>
         )}
       </div>
       <div className="media-card__footer">
         <div style={{ flex: 1, minWidth: 0 }}>
           <span className="media-card__name" title={media.name}>{media.name}</span>
           {media.size && <div className="media-card__size">{formatSize(media.size)}</div>}
+          <span className="media-card__size">{formatSize(media.size)}</span>
         </div>
         <button className="media-card__del" onClick={() => onDelete(media.id)} title="Hapus">
           <IconTrash />
@@ -246,6 +293,7 @@ function ListRow({ media, onDelete }) {
         <span className="list-row__meta">
           {typeLabel[media.type] || media.type}
           {media.duration ? ` · ${formatDuration(media.duration)}` : ""}
+          {media.duration ? ` · ${Math.round(media.duration)}s` : ""}
           {media.size ? ` · ${formatSize(media.size)}` : ""}
         </span>
       </div>
@@ -262,6 +310,10 @@ function SectionHeader({ label, count }) {
     <div className="media-section-header">
       <span className="media-section-header__label">{label}</span>
       {count > 0 && <span className="media-section-header__count">{count}</span>}
+function SectionHeader({ label }) {
+  return (
+    <div className="media-section-header">
+      <span className="media-section-header__label">{label}</span>
     </div>
   );
 }
@@ -384,6 +436,7 @@ export default function MediaPage() {
 
   return (
     <main className="main-content media-page">
+    <div className="media-page-wrapper">
       {/* ── Top Bar ─────────────────────────────── */}
       <div className="media-page__topbar">
         <h1 className="media-page__title">My Media</h1>
@@ -407,6 +460,7 @@ export default function MediaPage() {
             <input
               type="text"
               placeholder="Search media ...."
+              placeholder="Search media ..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -464,6 +518,21 @@ export default function MediaPage() {
                 </div>
               </>
             )}
+            <SectionHeader label="VIDEO CLIPS" />
+            <div className={viewMode === "grid" ? "media-grid" : "media-listview"}>
+              {/* Upload box selalu muncul di awal */}
+              {viewMode === "grid" && (
+                <UploadBox onUpload={handleUpload} uploading={uploading} />
+              )}
+
+              {viewMode === "grid"
+                ? videos.map((m) => (
+                    <VideoCard key={m.id} media={m} onDelete={handleDelete} />
+                  ))
+                : videos.map((m) => (
+                    <ListRow key={m.id} media={m} onDelete={handleDelete} />
+                  ))}
+            </div>
           </section>
 
           {/* AUDIO TRACKS */}
@@ -473,6 +542,11 @@ export default function MediaPage() {
               <p className="media-section__empty">Belum ada audio — unggah file MP3, WAV, atau OGG</p>
             ) : (
               <div className="audio-list">
+            <SectionHeader label="AUDIO TRACKS" />
+            {audios.length === 0 ? (
+              <p className="media-section__empty">Belum ada audio</p>
+            ) : (
+              <div className={viewMode === "grid" ? "audio-grid" : "media-listview"}>
                 {audios.map((m) =>
                   viewMode === "grid" ? (
                     <AudioRow key={m.id} media={m} onDelete={handleDelete} />
@@ -491,6 +565,11 @@ export default function MediaPage() {
               <p className="media-section__empty">Belum ada gambar — unggah file PNG, JPG, atau WebP</p>
             ) : (
               <div className={viewMode === "grid" ? "media-grid media-grid--images" : "media-listview"}>
+            <SectionHeader label="IMAGES" />
+            {images.length === 0 ? (
+              <p className="media-section__empty">Belum ada gambar</p>
+            ) : (
+              <div className={viewMode === "grid" ? "media-grid" : "media-listview"}>
                 {viewMode === "grid"
                   ? images.map((m) => (
                       <ImageCard key={m.id} media={m} onDelete={handleDelete} />
@@ -518,5 +597,6 @@ export default function MediaPage() {
         </>
       )}
     </main>
+    </div>
   );
 }
