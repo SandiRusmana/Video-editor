@@ -14,7 +14,7 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
   // Cari clip yang aktif berdasarkan posisi playhead saat ini (hanya video/image)
   const activeClip = clips.find(
     (c) => c.trackType !== "AUDIO" && currentTime >= c.timelineStart && currentTime < c.timelineStart + c.duration
-  ) ?? (clips.find((c) => c.trackType !== "AUDIO") || null);
+  ) || null;
 
   const isVideo = activeClip?.type === "video";
   const isImage = activeClip?.type === "image";
@@ -213,7 +213,7 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [isPlaying, isVideo, totalDuration, onSeek, onTogglePlay]);
+  }, [isPlaying, isVideo, activeAudioClip, totalDuration, onSeek]);
 
   return (
     <section className="canvas-preview">

@@ -46,7 +46,7 @@ export class TimelineService {
           orderBy: { timelineStart: 'asc' },
           include: {
             media: {
-              select: { id: true, name: true, type: true, duration: true, thumbnail: true },
+              select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
             },
           },
         },
@@ -94,7 +94,7 @@ export class TimelineService {
       },
       include: {
         media: {
-          select: { id: true, name: true, type: true, duration: true, thumbnail: true },
+          select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
         },
       },
     });
