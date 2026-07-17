@@ -65,6 +65,10 @@ function IconList() {
 
 function IconUpload() {
   return (
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5">
       <path d="M12 5v14M5 12h14" />
     </svg>
@@ -110,6 +114,14 @@ function IconTrash() {
   );
 }
 
+function IconWaveform() {
+  return (
+    <svg viewBox="0 0 40 16" width="36" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M0 8 Q5 2 10 8 Q15 14 20 8 Q25 2 30 8 Q35 14 40 8" />
+    </svg>
+  );
+}
+
 // ─── Upload Box ──────────────────────────────────────────────────────────────
 function UploadBox({ onUpload, uploading }) {
   const inputRef = useRef(null);
@@ -144,6 +156,7 @@ function UploadBox({ onUpload, uploading }) {
         {uploading ? <div className="spinner" /> : <IconUpload />}
       </div>
       <span className="media-upload-box__label">
+        {uploading ? "Mengunggah..." : "Upload Media"}
         {uploading ? "Uploading..." : "Upload Media"}
       </span>
     </div>
@@ -152,6 +165,16 @@ function UploadBox({ onUpload, uploading }) {
 
 // ─── Video Card (Grid) ───────────────────────────────────────────────────────
 function VideoCard({ media, onDelete }) {
+  return (
+    <div className="media-card media-card--video">
+      <div className="media-card__thumb media-card__thumb--video">
+        {media.thumbnail ? (
+          <img src={`${API_BASE}${media.thumbnail}`} alt={media.name} className="media-card__img" />
+        ) : (
+          <IconVideo />
+        )}
+        {media.duration && (
+          <span className="media-card__badge">{formatDuration(media.duration)}</span>
   const thumbnailSrc = media.thumbnail ? (media.thumbnail.startsWith("http") ? media.thumbnail : `${API_BASE}${media.thumbnail}`) : null;
   return (
     <div className="media-card media-card--video">
@@ -170,6 +193,7 @@ function VideoCard({ media, onDelete }) {
       <div className="media-card__footer">
         <div style={{ flex: 1, minWidth: 0 }}>
           <span className="media-card__name" title={media.name}>{media.name}</span>
+          {media.size && <div className="media-card__size">{formatSize(media.size)}</div>}
           <span className="media-card__duration">{media.duration ? `${Math.round(media.duration)}s` : ""}</span>
         </div>
         <button className="media-card__del" onClick={() => onDelete(media.id)} title="Hapus">
@@ -184,6 +208,19 @@ function VideoCard({ media, onDelete }) {
 function AudioRow({ media, onDelete }) {
   return (
     <div className="audio-row">
+      <div className="audio-row__icon">
+        <IconAudio />
+      </div>
+      <div className="audio-row__wave">
+        <IconWaveform />
+      </div>
+      <span className="audio-row__name" title={media.name}>{media.name}</span>
+      {media.duration && (
+        <span className="audio-row__dur">{formatDuration(media.duration)}</span>
+      )}
+      <button className="audio-row__del" onClick={() => onDelete(media.id)} title="Hapus">
+        <IconTrash />
+      </button>
       <div className="audio-row__left">
         <div className="audio-row__icon">
           <IconAudio />
@@ -204,6 +241,13 @@ function AudioRow({ media, onDelete }) {
 
 // ─── Image Card (Grid) ───────────────────────────────────────────────────────
 function ImageCard({ media, onDelete }) {
+  return (
+    <div className="media-card media-card--image">
+      <div className="media-card__thumb media-card__thumb--image">
+        {media.thumbnail ? (
+          <img src={`${API_BASE}${media.thumbnail}`} alt={media.name} className="media-card__img" />
+        ) : (
+          <IconImage />
   const thumbnailSrc = media.thumbnail ? (media.thumbnail.startsWith("http") ? media.thumbnail : `${API_BASE}${media.thumbnail}`) : null;
   return (
     <div className="media-card media-card--image">
@@ -223,6 +267,7 @@ function ImageCard({ media, onDelete }) {
       <div className="media-card__footer">
         <div style={{ flex: 1, minWidth: 0 }}>
           <span className="media-card__name" title={media.name}>{media.name}</span>
+          {media.size && <div className="media-card__size">{formatSize(media.size)}</div>}
           <span className="media-card__size">{formatSize(media.size)}</span>
         </div>
         <button className="media-card__del" onClick={() => onDelete(media.id)} title="Hapus">
@@ -247,6 +292,7 @@ function ListRow({ media, onDelete }) {
         <span className="list-row__name">{media.name}</span>
         <span className="list-row__meta">
           {typeLabel[media.type] || media.type}
+          {media.duration ? ` · ${formatDuration(media.duration)}` : ""}
           {media.duration ? ` · ${Math.round(media.duration)}s` : ""}
           {media.size ? ` · ${formatSize(media.size)}` : ""}
         </span>
@@ -259,6 +305,11 @@ function ListRow({ media, onDelete }) {
 }
 
 // ─── Section Header ──────────────────────────────────────────────────────────
+function SectionHeader({ label, count }) {
+  return (
+    <div className="media-section-header">
+      <span className="media-section-header__label">{label}</span>
+      {count > 0 && <span className="media-section-header__count">{count}</span>}
 function SectionHeader({ label }) {
   return (
     <div className="media-section-header">
@@ -384,6 +435,7 @@ export default function MediaPage() {
   const hasResults = videos.length + audios.length + images.length > 0;
 
   return (
+    <main className="main-content media-page">
     <div className="media-page-wrapper">
       {/* ── Top Bar ─────────────────────────────── */}
       <div className="media-page__topbar">
@@ -407,6 +459,7 @@ export default function MediaPage() {
             <IconSearch />
             <input
               type="text"
+              placeholder="Search media ...."
               placeholder="Search media ..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -443,6 +496,28 @@ export default function MediaPage() {
         <>
           {/* VIDEO CLIPS */}
           <section className="media-section">
+            <SectionHeader label="VIDEO CLIPS" count={videos.length} />
+            {viewMode === "grid" ? (
+              <div className="media-grid">
+                {/* Upload box selalu muncul di posisi pertama */}
+                <UploadBox onUpload={handleUpload} uploading={uploading} />
+
+                {videos.map((m) => (
+                  <VideoCard key={m.id} media={m} onDelete={handleDelete} />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="media-upload-list-wrap">
+                  <UploadBox onUpload={handleUpload} uploading={uploading} />
+                </div>
+                <div className="media-listview">
+                  {videos.map((m) => (
+                    <ListRow key={m.id} media={m} onDelete={handleDelete} />
+                  ))}
+                </div>
+              </>
+            )}
             <SectionHeader label="VIDEO CLIPS" />
             <div className={viewMode === "grid" ? "media-grid" : "media-listview"}>
               {/* Upload box selalu muncul di awal */}
@@ -462,6 +537,11 @@ export default function MediaPage() {
 
           {/* AUDIO TRACKS */}
           <section className="media-section">
+            <SectionHeader label="AUDIO TRACKS" count={audios.length} />
+            {audios.length === 0 ? (
+              <p className="media-section__empty">Belum ada audio — unggah file MP3, WAV, atau OGG</p>
+            ) : (
+              <div className="audio-list">
             <SectionHeader label="AUDIO TRACKS" />
             {audios.length === 0 ? (
               <p className="media-section__empty">Belum ada audio</p>
@@ -480,6 +560,11 @@ export default function MediaPage() {
 
           {/* IMAGES */}
           <section className="media-section">
+            <SectionHeader label="IMAGES" count={images.length} />
+            {images.length === 0 ? (
+              <p className="media-section__empty">Belum ada gambar — unggah file PNG, JPG, atau WebP</p>
+            ) : (
+              <div className={viewMode === "grid" ? "media-grid media-grid--images" : "media-listview"}>
             <SectionHeader label="IMAGES" />
             {images.length === 0 ? (
               <p className="media-section__empty">Belum ada gambar</p>
@@ -511,6 +596,7 @@ export default function MediaPage() {
           )}
         </>
       )}
+    </main>
     </div>
   );
 }
