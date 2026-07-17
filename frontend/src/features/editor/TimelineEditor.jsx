@@ -31,7 +31,7 @@ function TrimHandle({ side, onDragStart }) {
   );
 }
 
-function Playhead({ currentTime, totalDuration, onSeek }) {
+function Playhead({ currentTime, totalDuration, onSeek, onSeekStart, onSeekEnd }) {
   const dragRef = useRef(null);
 
   const handleDragStart = useCallback(
@@ -40,6 +40,7 @@ function Playhead({ currentTime, totalDuration, onSeek }) {
       const startX = e.clientX;
       const startTime = currentTime;
       dragRef.current = { startX, startTime };
+      onSeekStart?.();
 
       const handleMouseMove = (moveEvent) => {
         const deltaPx = moveEvent.clientX - dragRef.current.startX;
@@ -51,12 +52,13 @@ function Playhead({ currentTime, totalDuration, onSeek }) {
       const handleMouseUp = () => {
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        onSeekEnd?.();
       };
 
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     },
-    [currentTime, totalDuration, onSeek]
+    [currentTime, totalDuration, onSeek, onSeekStart, onSeekEnd]
   );
 
   // Ditambahkan offset 80px agar sejajar dengan posisi awal lane
@@ -150,6 +152,8 @@ export default function TimelineEditor({
   onDropMedia,
   onReorderClip,
   onDeleteClip,
+  onSeekStart,
+  onSeekEnd,
 }) {
   const ruler = buildRuler(Math.max(totalDuration, 40));
   const [dragOverTrack, setDragOverTrack] = useState(null); // 'VIDEO' | 'AUDIO' | 'EMPTY' | null
@@ -165,7 +169,10 @@ export default function TimelineEditor({
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const newTime = Math.max(0, Math.min(totalDuration, clickX / PIXELS_PER_SECOND));
+    onSeekStart?.();
     onSeek(newTime);
+    // Lane click selesai seketika (bukan drag), langsung release
+    setTimeout(() => onSeekEnd?.(), 100);
   };
 
   const handleDragOver = (e, trackType) => {
@@ -283,7 +290,13 @@ export default function TimelineEditor({
           )}
 
           {clips.length > 0 && (
-            <Playhead currentTime={currentTime} totalDuration={totalDuration} onSeek={onSeek} />
+            <Playhead
+              currentTime={currentTime}
+              totalDuration={totalDuration}
+              onSeek={onSeek}
+              onSeekStart={onSeekStart}
+              onSeekEnd={onSeekEnd}
+            />
           )}
 
         </div>

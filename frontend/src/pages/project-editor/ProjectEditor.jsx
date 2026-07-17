@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import MediaLibrary from "../../features/editor/MediaLibrary";
 import CanvasPreview from "../../features/editor/CanvasPreview";
 import PropertiesPanel from "../../features/editor/PropertiesPanel";
@@ -21,6 +21,7 @@ export default function ProjectEditor({
     updateClipTrim,
     addClipToTimeline,
     deleteClip,
+    deleteMedia,
     reorderClip,
     currentTime,
     setCurrentTime,
@@ -42,6 +43,19 @@ export default function ProjectEditor({
     const trimmed = nameDraft.trim();
     if (trimmed) setProjectName(trimmed);
     setIsEditingName(false);
+  };
+
+  // isSeeking: ref yang di-set saat user drag/klik playhead di timeline.
+  // CanvasPreview menggunakannya untuk memblokir onTimeUpdate dari audio/video
+  // agar tidak menimpa posisi yang sedang di-seek user.
+  const isSeeking = useRef(false);
+  const handleSeekStart = () => { isSeeking.current = true; };
+  // seekGeneration: counter yang naik setiap drag selesai, agar CanvasPreview
+  // dipaksa re-sync audio/video ke posisi baru setelah playhead dilepas.
+  const [seekGeneration, setSeekGeneration] = useState(0);
+  const handleSeekEnd = () => {
+    isSeeking.current = false;
+    setSeekGeneration((g) => g + 1);
   };
 
   // Dipanggil saat file di-drop dari Media Library ke Timeline
@@ -86,6 +100,13 @@ export default function ProjectEditor({
         </nav>
         <div className="project-editor__user">
           <span>👤 Asep</span>
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={onKembaliKeDashboard}
+            title="Kembali ke Dashboard"
+          >
+            ← Keluar Proyek
+          </button>
           <button className="btn btn--ghost btn--sm">Logout</button>
         </div>
       </header>
@@ -95,6 +116,7 @@ export default function ProjectEditor({
           mediaList={mediaLibrary}
           onAddToTimeline={addClipToTimeline}
           onUploadMedia={uploadMedia}
+          onDeleteMedia={deleteMedia}
         />
         <CanvasPreview
           currentTime={currentTime}
@@ -103,6 +125,8 @@ export default function ProjectEditor({
           onTogglePlay={() => setIsPlaying((p) => !p)}
           onSeek={setCurrentTime}
           clips={clips}
+          isSeeking={isSeeking}
+          seekGeneration={seekGeneration}
         />
         <PropertiesPanel clip={selectedClip} onUpdateTrim={updateClipTrim} />
       </div>
@@ -119,6 +143,8 @@ export default function ProjectEditor({
         onDropMedia={handleDropMedia}
         onReorderClip={reorderClip}
         onDeleteClip={deleteClip}
+        onSeekStart={handleSeekStart}
+        onSeekEnd={handleSeekEnd}
       />
     </div>
   );

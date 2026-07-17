@@ -7,7 +7,7 @@ function formatTime(sec) {
   return `${m}:${s}`;
 }
 
-export default function CanvasPreview({ currentTime, totalDuration, isPlaying, onTogglePlay, onSeek, clips = [] }) {
+export default function CanvasPreview({ currentTime, totalDuration, isPlaying, onTogglePlay, onSeek, clips = [], isSeeking, seekGeneration }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -26,9 +26,27 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
   );
   const audioSrc = activeAudioClip?.url ?? null;
 
-  // Handler klik tombol Play/Pause
+  // Handler klik tombol Play/Pause.
+  // PENTING: video.play() dan audio.play() dipanggil LANGSUNG di sini (dalam
+  // konteks gesture pengguna) agar browser tidak memblokir autoplay policy.
+  // useEffect di bawah menangani sinkronisasi saat state berubah dari luar.
   const handleTogglePlay = () => {
-    // Serahkan perubahan state ke parent component.
+    const videoEl = videoRef.current;
+    if (videoEl && src && isVideo) {
+      if (!isPlaying) {
+        videoEl.play().catch(console.error);
+      } else {
+        videoEl.pause();
+      }
+    }
+    const audioEl = audioRef.current;
+    if (audioEl && audioSrc) {
+      if (!isPlaying) {
+        audioEl.play().catch(console.error);
+      } else {
+        audioEl.pause();
+      }
+    }
     onTogglePlay();
   };
 
@@ -46,6 +64,7 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
   }, [src, isPlaying, isVideo]);
 
   // 2. VIDEO: Sinkronisasi Posisi Waktu
+  // seekGeneration ditambah ke deps agar video juga di-seek ulang setelah user drag selesai.
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl || !src || !activeClip || !isVideo) return;
@@ -57,9 +76,11 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
     if (Math.abs(videoEl.currentTime - targetInFile) > 0.3) {
       videoEl.currentTime = targetInFile;
     }
-  }, [currentTime, src, activeClip, isVideo]);
+  }, [currentTime, src, activeClip, isVideo, seekGeneration]);
 
-  // 3. AUDIO: Sinkronisasi Terpusat (Play/Pause & Pemuatan Ulang Aset)
+  // 3. AUDIO: Sinkronisasi Terpusat (Play/Pause & Re-seek setelah drag)
+  // seekGeneration ditambah ke deps agar effect ini re-run setelah user
+  // selesai drag playhead — memaksa audio seek ke posisi baru meski sedang playing.
   useEffect(() => {
     const audioEl = audioRef.current;
     if (!audioEl || !audioSrc || !activeAudioClip) return;
@@ -70,21 +91,26 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
 
     if (isPlaying) {
       if (audioEl.paused) {
-        // Nyalakan audio: Samakan posisi tepat sebelum berputar
+        // Baru mulai / resume dari pause: seek ke posisi tepat lalu play
         if (Math.abs(audioEl.currentTime - targetInFile) > 0.05) {
           audioEl.currentTime = targetInFile;
         }
         audioEl.play().catch((err) => console.log("Audio play failed:", err));
+      } else {
+        // Audio sudah berjalan: paksa seek jika posisi melenceng
+        // (terjadi setelah user drag playhead mundur saat audio playing)
+        if (Math.abs(audioEl.currentTime - targetInFile) > 0.05) {
+          audioEl.currentTime = targetInFile;
+        }
       }
     } else {
-      // Matikan audio: Instan tanpa interupsi seaking
       if (!audioEl.paused) {
         audioEl.pause();
       }
     }
-    // CATATAN: 'currentTime' SENGAJA dibuang dari dependency array di bawah ini
-    // agar audio tidak dipaksa lompat-lompat setiap milidetik saat lagu sedang berjalan.
-  }, [isPlaying, audioSrc, activeAudioClip]);
+    // currentTime SENGAJA tidak di deps saat playing — hanya seekGeneration
+    // yang memicu re-sync posisi, agar tidak seek setiap milidetik.
+  }, [isPlaying, audioSrc, activeAudioClip, seekGeneration]);
 
   // 4. AUDIO SCRUBBING: Sinkronisasi Waktu HANYA saat aplikasi sedang di-Pause
   useEffect(() => {
@@ -132,6 +158,7 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
   // Video berjalan sendiri -> update playhead di timeline
   const handleTimeUpdate = (e) => {
     if (e.target.seeking) return;
+    if (isSeeking?.current) return; // user sedang drag/seek manual
     if (!isPlaying || !activeClip || !isVideo) return;
     const clipOffset = e.target.currentTime - (activeClip.trimStart ?? 0);
     const newTime = activeClip.timelineStart + Math.max(0, clipOffset);
@@ -143,10 +170,27 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
     }
   };
 
-  // LOOP DRIVER UNTUK SELAIN VIDEO (Gambar / Area Kosong / Hanya Audio)
+  // Audio berjalan sendiri -> update playhead di timeline (sama seperti video)
+  const handleAudioTimeUpdate = (e) => {
+    if (e.target.seeking) return;
+    if (isSeeking?.current) return; // user sedang drag/seek manual
+    if (!isPlaying || !activeAudioClip) return;
+    const clipOffset = e.target.currentTime - (activeAudioClip.trimStart ?? 0);
+    const newTime = activeAudioClip.timelineStart + Math.max(0, clipOffset);
+
+    if (newTime <= totalDuration) {
+      onSeek(newTime);
+    } else {
+      onTogglePlay();
+    }
+  };
+
+  // LOOP DRIVER UNTUK SELAIN VIDEO DAN SELAIN AUDIO (Gambar / Area Kosong)
+  // Hanya aktif jika tidak ada video maupun audio yang bisa jadi master clock.
   useEffect(() => {
     if (!isPlaying) return;
-    if (isVideo) return;
+    if (isVideo) return;        // video jadi master clock
+    if (activeAudioClip) return; // audio jadi master clock via handleAudioTimeUpdate
 
     let lastTime = performance.now();
     let frameId;
@@ -211,6 +255,7 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
           src={audioSrc || ""}
           preload="auto"
           style={{ display: "none" }}
+          onTimeUpdate={handleAudioTimeUpdate}
           onLoadedMetadata={handleAudioLoadedMetadata}
         />
       </div>

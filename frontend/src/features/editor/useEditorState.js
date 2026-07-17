@@ -173,6 +173,26 @@ export default function useEditorState(projectId) {
     [projectId, loadMedia]
   );
 
+  // Hapus file media dari library & backend
+  const deleteMedia = useCallback(
+    async (mediaId) => {
+      if (!projectId) return;
+      if (!window.confirm("Apakah Anda yakin ingin menghapus media ini? Klip yang menggunakan media ini di timeline juga akan terhapus.")) return;
+
+      try {
+        await apiFetch(`/media/${mediaId}`, {
+          method: "DELETE",
+        });
+        // Segarkan Media Library dan Timeline setelah berhasil dihapus
+        await loadMedia();
+        await loadTimeline();
+      } catch (err) {
+        alert(err.message || "Gagal menghapus media");
+      }
+    },
+    [projectId, loadMedia, loadTimeline]
+  );
+
   // Hitung posisi (left) tiap clip secara magnetik per jenis track (independen)
   const clipsWithLayout = useMemo(() => {
     const videoClips = clips.filter((c) => c.trackType === "VIDEO");
@@ -308,6 +328,7 @@ export default function useEditorState(projectId) {
     updateClipTrim,
     addClipToTimeline,
     deleteClip,
+    deleteMedia,
     reorderClip,
     currentTime,
     setCurrentTime,

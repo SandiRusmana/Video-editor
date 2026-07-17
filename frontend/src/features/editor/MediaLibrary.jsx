@@ -13,7 +13,7 @@ const ICONS = {
   image: "🖼️",
 };
 
-export default function MediaLibrary({ mediaList, onAddToTimeline, onUploadMedia }) {
+export default function MediaLibrary({ mediaList, onAddToTimeline, onUploadMedia, onDeleteMedia }) {
   const fileInputRef = useRef(null);
 
   const handleUploadClick = () => {
@@ -71,13 +71,22 @@ export default function MediaLibrary({ mediaList, onAddToTimeline, onUploadMedia
                 <span className="media-item__name">{media.name}</span>
                 <span className="media-item__duration">{formatDuration(media.sourceDuration)}</span>
               </div>
-              <button
-                className="media-item__add"
-                title="Add to Timeline"
-                onClick={() => onAddToTimeline(media)}
-              >
-                +
-              </button>
+              <div className="media-item__actions" style={{ display: "flex", gap: "4px" }}>
+                <button
+                  className="media-item__add"
+                  title="Add to Timeline"
+                  onClick={() => onAddToTimeline(media)}
+                >
+                  +
+                </button>
+                <button
+                  className="media-item__delete"
+                  title="Hapus Media"
+                  onClick={() => onDeleteMedia(media.id)}
+                >
+                  ✕
+                </button>
+              </div>
             </li>
           ))}
         </ul>
