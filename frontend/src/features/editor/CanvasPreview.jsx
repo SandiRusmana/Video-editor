@@ -229,6 +229,7 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
               className="canvas-preview__video"
               src={src}
               playsInline
+              muted={Boolean(audioSrc)}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
             />
@@ -250,14 +251,16 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
           </span>
         )}
 
-        <audio
-          ref={audioRef}
-          src={audioSrc || ""}
-          preload="auto"
-          style={{ display: "none" }}
-          onTimeUpdate={handleAudioTimeUpdate}
-          onLoadedMetadata={handleAudioLoadedMetadata}
-        />
+        {audioSrc && (
+          <audio
+            ref={audioRef}
+            src={audioSrc}
+            preload="auto"
+            style={{ display: "none" }}
+            onTimeUpdate={handleAudioTimeUpdate}
+            onLoadedMetadata={handleAudioLoadedMetadata}
+          />
+        )}
       </div>
 
       <div className="canvas-preview__controls">
