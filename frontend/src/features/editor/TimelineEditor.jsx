@@ -154,12 +154,22 @@ export default function TimelineEditor({
   onDeleteClip,
   onSeekStart,
   onSeekEnd,
+  onSplitClip,
 }) {
   const ruler = buildRuler(Math.max(totalDuration, 40));
   const [dragOverTrack, setDragOverTrack] = useState(null); // 'VIDEO' | 'AUDIO' | 'EMPTY' | null
 
   const videoClips = clips.filter((c) => c.trackType === "VIDEO");
   const audioClips = clips.filter((c) => c.trackType === "AUDIO");
+
+  // Tombol Split aktif hanya jika: ada clip dipilih DAN playhead
+  // berada DALAM rentang clip itu (dengan margin 0.05s di tiap ujung
+  // untuk mencegah split di posisi pas awal/akhir clip).
+  const selectedClip = clips.find((c) => c.id === selectedClipId) || null;
+  const canSplit =
+    selectedClip !== null &&
+    currentTime > selectedClip.timelineStart + 0.05 &&
+    currentTime < selectedClip.timelineStart + selectedClip.duration - 0.05;
 
   // Ditambah offset 80px dari lebar label kolom kiri
   const timelineWidth = 80 + Math.max(totalDuration, 40) * PIXELS_PER_SECOND;
@@ -213,7 +223,21 @@ export default function TimelineEditor({
     <section className="timeline-editor">
       <div className="timeline-editor__header">
         <h3>TIMELINE EDITOR</h3>
-        <span className="timeline-editor__total">{formatTime(totalDuration)} total</span>
+        <div className="timeline-editor__header-actions">
+          <button
+            className={`timeline-editor__btn-split${canSplit ? " timeline-editor__btn-split--active" : ""}`}
+            onClick={() => canSplit && onSplitClip(selectedClipId, currentTime)}
+            disabled={!canSplit}
+            title={
+              canSplit
+                ? "Potong clip di posisi playhead"
+                : "Pilih sebuah clip lalu posisikan playhead di tengahnya untuk memotong"
+            }
+          >
+            ✂️ Split
+          </button>
+          <span className="timeline-editor__total">{formatTime(totalDuration)} total</span>
+        </div>
       </div>
 
       <div className="timeline-editor__viewport">

@@ -294,6 +294,25 @@ export default function useEditorState(projectId) {
     });
   }, [projectId]);
 
+  // Membagi (split) clip menjadi dua bagian pada posisi playhead.
+  // Cukup panggil API lalu reload timeline — backend sudah menangani
+  // semua perhitungan inPoint / outPoint untuk kedua clip hasil split.
+  const splitClip = useCallback(
+    async (clipId, atTime) => {
+      if (!clipId) return;
+      try {
+        await apiFetch(`/clips/${clipId}/split`, {
+          method: "POST",
+          body: JSON.stringify({ atTime }),
+        });
+        await loadTimeline(); // sinkronkan state dengan data backend
+      } catch (err) {
+        alert(err.message || "Gagal memotong clip");
+      }
+    },
+    [loadTimeline],
+  );
+
   return {
     mediaLibrary,
     mediaLoading,
@@ -309,6 +328,7 @@ export default function useEditorState(projectId) {
     addClipToTimeline,
     deleteClip,
     reorderClip,
+    splitClip,
     currentTime,
     setCurrentTime,
     isPlaying,

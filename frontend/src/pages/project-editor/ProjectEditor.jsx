@@ -22,6 +22,7 @@ export default function ProjectEditor({
         addClipToTimeline,
         deleteClip,
         reorderClip,
+        splitClip,
         currentTime,
         setCurrentTime,
         isPlaying,
@@ -119,6 +120,7 @@ export default function ProjectEditor({
                 onDropMedia={handleDropMedia}
                 onReorderClip={reorderClip}
                 onDeleteClip={deleteClip}
+                onSplitClip={splitClip}
             />
         </div>
     );
