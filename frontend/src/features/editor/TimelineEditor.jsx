@@ -201,7 +201,7 @@ export default function TimelineEditor({
     if (clipId) {
       const rect = e.currentTarget.getBoundingClientRect();
       const dropX = e.clientX - rect.left;
-      
+
       const trackClips = trackType === "VIDEO" ? videoClips : audioClips;
       let targetIndex = trackClips.length;
       for (let i = 0; i < trackClips.length; i++) {
@@ -242,7 +242,7 @@ export default function TimelineEditor({
 
       <div className="timeline-editor__viewport">
         <div className="timeline-editor__content-wrapper" style={{ width: timelineWidth }}>
-          
+
           <div className="timeline-editor__ruler">
             {ruler.map((t) => (
               <span key={t} className="timeline-editor__mark" style={{ left: 80 + t * PIXELS_PER_SECOND }}>

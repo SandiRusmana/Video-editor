@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 
 export const PIXELS_PER_SECOND = 20;
 const MIN_CLIP_DURATION = 1; // detik, durasi minimum saat di-trim
@@ -59,7 +59,8 @@ export default function useEditorState(projectId) {
           name: m.name,
           type: m.type.toLowerCase(), // backend: VIDEO/AUDIO/IMAGE -> video/audio/image
           sourceDuration: m.duration ?? 5, // gambar tidak punya duration, default 5 detik
-          thumbnail: m.thumbnail,
+          thumbnail: m.thumbnail ? `${API_BASE}${m.thumbnail}` : null,
+          url: `${API_BASE}${m.path}`, // dipakai Canvas/Preview untuk src video/gambar
         })),
       );
     } catch (err) {
@@ -90,10 +91,8 @@ export default function useEditorState(projectId) {
           trimStart: clip.inPoint,
           trimEnd: clip.outPoint,
           timelineStart: clip.timelineStart, // posisi asli dari backend, dipakai untuk layout
-          // Tentukan trackType dari tipe media, bukan dari track di database,
-          // agar clip audio lama yang salah masuk track VIDEO tetap tampil di Audio Track.
-          trackType: (clip.media?.type ?? clip.trackType) === "AUDIO" ? "AUDIO" : "VIDEO",
-          url: clip.media?.path ? `http://localhost:3000${clip.media.path}` : null,
+          trackType: clip.trackType,
+          url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null, // dipakai CanvasPreview
         }));
       setClips(flatClips);
     } catch (err) {
@@ -129,10 +128,8 @@ export default function useEditorState(projectId) {
             trimStart: created.inPoint,
             trimEnd: created.outPoint,
             timelineStart: created.timelineStart,
-            url: created.media?.path ? `http://localhost:3000${created.media.path}` : null,
-            // created.media.type dari backend = uppercase (AUDIO/VIDEO/IMAGE)
-            // media.type dari mediaLibrary = lowercase (audio/video/image)
-            trackType: (created.media?.type ?? media.type).toUpperCase() === 'AUDIO' ? 'AUDIO' : 'VIDEO',
+            trackType: created.track?.type ?? (media.type === "audio" ? "AUDIO" : "VIDEO"),
+            url: created.media?.path ? `${API_BASE}${created.media.path}` : media.url,
           },
         ]);
       } catch (err) {
@@ -142,60 +139,19 @@ export default function useEditorState(projectId) {
     [projectId],
   );
 
-  // Upload file media baru ke backend
-  const uploadMedia = useCallback(
-    async (file) => {
-      if (!projectId) return;
-      const token = localStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("file", file);
-
-      try {
-        const res = await fetch(`${API_BASE}/media/upload?projectId=${projectId}`, {
-          method: "POST",
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: formData,
-        });
-
-        const data = await res.json().catch(() => null);
-        if (!res.ok) {
-          throw new Error(data?.message || `Upload gagal (${res.status})`);
-        }
-
-        // Segarkan Media Library setelah berhasil mengunggah
-        await loadMedia();
-      } catch (err) {
-        alert(err.message || "Gagal mengunggah media");
-      }
-    },
-    [projectId, loadMedia]
-  );
-
-  // Hitung posisi (left) tiap clip secara magnetik per jenis track (independen)
+  // Hitung posisi (left) tiap clip berdasarkan timelineStart ASLI dari
+  // backend (bukan cumulative sum) — supaya jarak/gap antar clip hasil
+  // drag & drop ke posisi tertentu (Story 8) tetap tergambar benar.
   const clipsWithLayout = useMemo(() => {
-    const videoClips = clips.filter((c) => c.trackType === "VIDEO");
-    const audioClips = clips.filter((c) => c.trackType === "AUDIO");
-
-    const layoutTrack = (trackClips) => {
-      let currentStart = 0;
-      return trackClips.map((clip) => {
-        const duration = clip.trimEnd - clip.trimStart;
-        const left = currentStart * PIXELS_PER_SECOND;
-        const calculatedStart = currentStart;
-        currentStart += duration;
-        return {
-          ...clip,
-          duration,
-          timelineStart: calculatedStart,
-          left,
-          width: duration * PIXELS_PER_SECOND,
-        };
-      });
-    };
-
-    return [...layoutTrack(videoClips), ...layoutTrack(audioClips)];
+    return clips.map((clip) => {
+      const duration = clip.trimEnd - clip.trimStart;
+      return {
+        ...clip,
+        duration,
+        left: clip.timelineStart * PIXELS_PER_SECOND,
+        width: duration * PIXELS_PER_SECOND,
+      };
+    });
   }, [clips]);
 
   const totalDuration = useMemo(
@@ -209,95 +165,93 @@ export default function useEditorState(projectId) {
 
   const selectedClip = clipsWithLayout.find((c) => c.id === selectedClipId) || null;
 
-  // TODO: begitu endpoint PATCH /clips/:id (Trim Clip) sudah tersedia di
-  // backend, tambahkan pemanggilan apiFetch di sini supaya perubahan
-  // trim juga tersimpan ke database, bukan cuma state lokal seperti sekarang.
-  const updateClipTrim = useCallback((clipId, { trimStart, trimEnd }) => {
-    setClips((prev) =>
-      prev.map((clip) => {
-        if (clip.id !== clipId) return clip;
+  // Story 12 — Trim Clip: update local state langsung (biar drag handle
+  // terasa responsif/real-time di Canvas & Timeline — Acceptance 5, 9),
+  // lalu kirim ke backend dengan DEBOUNCE 400ms supaya tidak mengirim
+  // request berkali-kali tiap piksel saat user masih menggeser handle —
+  // baru benar-benar tersimpan (Acceptance 8) begitu user berhenti drag.
+  const trimTimersRef = useRef({});
 
-        let newStart = trimStart ?? clip.trimStart;
-        let newEnd = trimEnd ?? clip.trimEnd;
+  const updateClipTrim = useCallback(
+    (clipId, { trimStart, trimEnd }) => {
+      let computedStart, computedEnd, computedTimelineStart;
 
-        newStart = Math.max(0, Math.min(newStart, clip.trimEnd - MIN_CLIP_DURATION));
-        newEnd = Math.min(clip.sourceDuration, Math.max(newEnd, clip.trimStart + MIN_CLIP_DURATION));
+      setClips((prev) =>
+        prev.map((clip) => {
+          if (clip.id !== clipId) return clip;
 
-        return { ...clip, trimStart: newStart, trimEnd: newEnd };
-      }),
-    );
-  }, []);
+          let newStart = trimStart ?? clip.trimStart;
+          let newEnd = trimEnd ?? clip.trimEnd;
+
+          // Acceptance 6: start tidak boleh >= end (jaga jarak minimum)
+          newStart = Math.max(0, Math.min(newStart, clip.trimEnd - MIN_CLIP_DURATION));
+          // Acceptance 7: tidak boleh melebihi durasi media asli
+          newEnd = Math.min(clip.sourceDuration, Math.max(newEnd, clip.trimStart + MIN_CLIP_DURATION));
+
+          let timelineStartDelta = 0;
+          if (trimStart !== undefined) {
+            timelineStartDelta = newStart - clip.trimStart;
+          }
+
+          computedStart = newStart;
+          computedEnd = newEnd;
+          computedTimelineStart = clip.timelineStart + timelineStartDelta;
+
+          return { ...clip, trimStart: newStart, trimEnd: newEnd, timelineStart: computedTimelineStart };
+        }),
+      );
+
+      if (computedStart === undefined) return; // clip tidak ditemukan
+
+      clearTimeout(trimTimersRef.current[clipId]);
+      trimTimersRef.current[clipId] = setTimeout(async () => {
+        try {
+          await apiFetch(`/clips/${clipId}/trim`, {
+            method: "PATCH",
+            body: JSON.stringify({ inPoint: computedStart, outPoint: computedEnd, timelineStart: computedTimelineStart }),
+          });
+        } catch (err) {
+          alert(err.message || "Gagal menyimpan hasil trim");
+          loadTimeline(); // sinkronkan ulang ke kondisi asli dari backend kalau gagal
+        }
+      }, 400);
+    },
+    [loadTimeline],
+  );
 
   const selectClip = useCallback((clipId) => setSelectedClipId(clipId), []);
   const deselectClip = useCallback(() => setSelectedClipId(null), []);
 
-  // Hapus clip dari timeline — panggil API DELETE lalu hapus dari state lokal
-  const deleteClip = useCallback(
-    async (clipId) => {
-      if (!projectId) return;
-      try {
-        await apiFetch(`/projects/${projectId}/timeline/clips/${clipId}`, {
-          method: "DELETE",
-        });
-        setClips((prev) => {
-          const updatedClips = prev.filter((c) => c.id !== clipId);
-          // Update database order di background agar tidak tumpang tindih
-          if (updatedClips.length > 0) {
-            apiFetch(`/projects/${projectId}/timeline/reorder`, {
-              method: "PATCH",
-              body: JSON.stringify({ clipIds: updatedClips.map((c) => c.id) }),
-            }).catch(console.error);
-          }
-          return updatedClips;
-        });
-        // Kalau clip yang dihapus sedang dipilih, batalkan seleksi
-        setSelectedClipId((prev) => (prev === clipId ? null : prev));
-      } catch (err) {
-        alert(err.message || "Gagal menghapus clip dari timeline");
-      }
-    },
-    [projectId],
-  );
+  // Story 9 — Split Clip: potong clip yang sedang dipilih, tepat di posisi
+  // playhead saat ini. Backend yang menghitung ulang metadata (start/end)
+  // kedua clip hasil potongan; setelah berhasil, timeline di-refresh penuh
+  // supaya Canvas/Preview & daftar clip otomatis ikut ter-update (Acceptance 9).
+  const splitSelectedClip = useCallback(async () => {
+    if (!selectedClip) return;
 
-  // Memindahkan urutan clip (Reorder) di track yang sesuai secara independen
-  const reorderClip = useCallback((clipId, targetIndex) => {
-    setClips((prev) => {
-      const clipToMove = prev.find((c) => c.id === clipId);
-      if (!clipToMove) return prev;
+    const clipEnd = selectedClip.timelineStart + selectedClip.duration;
+    if (currentTime <= selectedClip.timelineStart || currentTime >= clipEnd) {
+      alert("Posisi playhead harus berada di dalam clip yang dipilih untuk melakukan split");
+      return;
+    }
 
-      const trackType = clipToMove.trackType;
-      // Pisahkan klip track yang sama dengan track lainnya
-      const sameTrackClips = prev.filter((c) => c.trackType === trackType);
-      const otherTrackClips = prev.filter((c) => c.trackType !== trackType);
-
-      const currentIndex = sameTrackClips.findIndex((c) => c.id === clipId);
-      if (currentIndex === -1) return prev;
-
-      const updatedSameTrack = [...sameTrackClips];
-      const [moved] = updatedSameTrack.splice(currentIndex, 1);
-
-      let insertAt = currentIndex < targetIndex ? targetIndex - 1 : targetIndex;
-      insertAt = Math.max(0, Math.min(insertAt, updatedSameTrack.length));
-      updatedSameTrack.splice(insertAt, 0, moved);
-
-      const updatedAll = [...updatedSameTrack, ...otherTrackClips];
-
-      // Simpan urutan baru ke database
-      apiFetch(`/projects/${projectId}/timeline/reorder`, {
-        method: "PATCH",
-        body: JSON.stringify({ clipIds: updatedAll.map((c) => c.id) }),
-      }).catch((err) => {
-        alert(err.message || "Gagal menyimpan urutan baru");
+    try {
+      await apiFetch(`/clips/${selectedClip.id}/split`, {
+        method: "POST",
+        body: JSON.stringify({ atTime: currentTime }),
       });
+      await loadTimeline();
+      deselectClip();
+    } catch (err) {
+      alert(err.message || "Gagal melakukan split clip");
+    }
+  }, [selectedClip, currentTime, loadTimeline, deselectClip]);
 
-      return updatedAll;
-    });
-  }, [projectId]);
-
-  // Membagi (split) clip menjadi dua bagian pada posisi playhead.
-  // Cukup panggil API lalu reload timeline — backend sudah menangani
-  // semua perhitungan inPoint / outPoint untuk kedua clip hasil split.
-  const splitClip = useCallback(
+  // Versi split yang menerima clipId & atTime langsung sebagai parameter —
+  // ini yang dipanggil TimelineEditor.jsx lewat prop "onSplitClip"
+  // (tombol Split bawaan TimelineEditor sudah punya validasi & clip
+  // terpilihnya sendiri, jadi cukup teruskan ke backend di sini).
+  const splitClipAt = useCallback(
     async (clipId, atTime) => {
       if (!clipId) return;
       try {
@@ -305,13 +259,58 @@ export default function useEditorState(projectId) {
           method: "POST",
           body: JSON.stringify({ atTime }),
         });
-        await loadTimeline(); // sinkronkan state dengan data backend
+        await loadTimeline();
+        deselectClip();
       } catch (err) {
-        alert(err.message || "Gagal memotong clip");
+        alert(err.message || "Gagal melakukan split clip");
       }
     },
-    [loadTimeline],
+    [loadTimeline, deselectClip],
   );
+
+  // Dipakai untuk mengaktifkan/nonaktifkan tombol Split di UI —
+  // true hanya kalau ada clip terpilih DAN playhead ada di dalam rentangnya.
+  const canSplit =
+    !!selectedClip &&
+    currentTime > selectedClip.timelineStart &&
+    currentTime < selectedClip.timelineStart + selectedClip.duration;
+
+  // Hapus satu clip dari timeline (dipanggil TimelineEditor.jsx sebagai
+  // prop "onDelete"). Backend endpoint-nya sudah ada dari Story 8/9 kemarin:
+  // DELETE /projects/:projectId/timeline/clips/:clipId
+  const deleteClip = useCallback(
+    async (clipId) => {
+      if (!projectId || !clipId) return;
+      try {
+        await apiFetch(`/projects/${projectId}/timeline/clips/${clipId}`, {
+          method: "DELETE",
+        });
+        setClips((prev) => prev.filter((c) => c.id !== clipId));
+        if (selectedClipId === clipId) deselectClip();
+      } catch (err) {
+        alert(err.message || "Gagal menghapus clip");
+      }
+    },
+    [projectId, selectedClipId, deselectClip],
+  );
+
+  // TODO: sama seperti trim, begitu endpoint Move Clip tersedia di backend,
+  // panggil API di sini supaya urutan/posisi baru tersimpan permanen.
+  const reorderClip = useCallback((clipId, targetIndex) => {
+    setClips((prev) => {
+      const currentIndex = prev.findIndex((c) => c.id === clipId);
+      if (currentIndex === -1) return prev;
+
+      const updated = [...prev];
+      const [moved] = updated.splice(currentIndex, 1);
+
+      let insertAt = currentIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      insertAt = Math.max(0, Math.min(insertAt, updated.length));
+
+      updated.splice(insertAt, 0, moved);
+      return updated;
+    });
+  }, []);
 
   return {
     mediaLibrary,
@@ -326,15 +325,18 @@ export default function useEditorState(projectId) {
     deselectClip,
     updateClipTrim,
     addClipToTimeline,
-    deleteClip,
     reorderClip,
-    splitClip,
+    splitSelectedClip,
+    splitClipAt,
+    canSplit,
+    deleteClip,
+    onDeleteClip: deleteClip,
+    onSplitClip: splitClipAt,
     currentTime,
     setCurrentTime,
     isPlaying,
     setIsPlaying,
     refreshTimeline: loadTimeline,
     refreshMedia: loadMedia,
-    uploadMedia,
   };
 }

@@ -162,6 +162,46 @@ export class TimelineService {
     return { first: firstClip, second: secondClip };
   }
 
+  // Story 12: Trim clip dengan mengubah titik awal (inPoint) atau titik akhir (outPoint).
+  // Mengubah inPoint/outPoint tidak mengubah file media asli.
+  async trimClip(userId: string, clipId: string, dto: { inPoint?: number, outPoint?: number, timelineStart?: number }) {
+    const clip = await this.prisma.clip.findUnique({
+      where: { id: clipId },
+      include: { track: { include: { project: true } }, media: true },
+    });
+    if (!clip) throw new NotFoundException('Clip tidak ditemukan');
+    if (clip.track.project.ownerId !== userId) {
+      throw new ForbiddenException('Bukan pemilik project ini');
+    }
+
+    let { inPoint, outPoint, timelineStart } = dto;
+    
+    inPoint = inPoint ?? clip.inPoint;
+    outPoint = outPoint ?? clip.outPoint;
+    timelineStart = timelineStart ?? clip.timelineStart;
+
+    if (inPoint >= outPoint) {
+      throw new BadRequestException('Titik awal (start time) tidak boleh lebih besar atau sama dengan titik akhir (end time)');
+    }
+
+    const duration = clip.media?.duration ?? DEFAULT_IMAGE_DURATION;
+    if (outPoint > duration) {
+      throw new BadRequestException('Nilai trim tidak boleh melebihi durasi media asli');
+    }
+    
+    if (inPoint < 0) {
+      throw new BadRequestException('Titik awal tidak boleh kurang dari 0');
+    }
+
+    return this.prisma.clip.update({
+      where: { id: clipId },
+      data: { inPoint, outPoint, timelineStart },
+      include: {
+        media: { select: { id: true, name: true, type: true, duration: true, thumbnail: true } },
+      },
+    });
+  }
+
   // Hapus satu clip dari timeline. File media aslinya tidak ikut terhapus
   // (cuma clip-nya, medianya tetap ada di Media Library).
   async deleteClip(userId: string, projectId: string, clipId: string) {
