@@ -13,6 +13,8 @@ export default function ProjectEditor({
 }) {
   const {
     mediaLibrary,
+    uploadMedia,
+    deleteMedia,
     clips,
     totalDuration,
     selectedClip,
@@ -32,7 +34,7 @@ export default function ProjectEditor({
   const [projectName, setProjectName] = useState(initialProjectName || "Konten YouTube");
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(initialProjectName || "Konten YouTube");
-  
+
   const [userName, setUserName] = useState("User");
   const isSeeking = useRef(false);
   const [seekGeneration, setSeekGeneration] = useState(0);
@@ -53,7 +55,7 @@ export default function ProjectEditor({
           setUserName(name);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const startEditingName = () => {
@@ -67,20 +69,18 @@ export default function ProjectEditor({
     setIsEditingName(false);
   };
 
-
-  // Dipanggil saat file di-drop dari Media Library ke Timeline
   const handleDropMedia = (mediaId) => {
     const media = mediaLibrary.find((m) => m.id === mediaId);
     if (media) addClipToTimeline(media);
   };
-  
+
   const handleSeekStart = () => {
     isSeeking.current = true;
   };
 
   const handleSeekEnd = () => {
     isSeeking.current = false;
-    setSeekGeneration(prev => prev + 1);
+    setSeekGeneration((prev) => prev + 1);
   };
 
   return (
@@ -125,7 +125,12 @@ export default function ProjectEditor({
       </header>
 
       <div className="project-editor__body">
-        <MediaLibrary mediaList={mediaLibrary} onAddToTimeline={addClipToTimeline} />
+        <MediaLibrary
+          mediaList={mediaLibrary}
+          onAddToTimeline={addClipToTimeline}
+          onUploadMedia={uploadMedia}
+          onDeleteMedia={deleteMedia}
+        />
         <CanvasPreview
           currentTime={currentTime}
           totalDuration={totalDuration}

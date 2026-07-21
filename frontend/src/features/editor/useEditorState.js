@@ -21,22 +21,31 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
-/**
- * Hook utama untuk state Editor — sekarang terhubung ke backend:
- * - mediaLibrary  -> GET  /media?projectId=
- * - clips (timeline) -> GET  /projects/:projectId/timeline
- * - addClipToTimeline -> POST /projects/:projectId/timeline/clips
- *
- * CATATAN: updateClipTrim & reorderClip untuk sekarang masih mengubah
- * state lokal saja (belum memanggil API) karena endpoint PATCH /clips/:id
- * (Trim) dan endpoint Move Clip belum tersedia di backend. Begitu endpoint
- * itu jadi, tinggal tambahkan pemanggilan API di dalam kedua fungsi ini,
- * mengikuti pola apiFetch yang sudah ada.
- */
+// Fetch khusus untuk upload file (FormData) — TIDAK boleh set header
+// Content-Type: application/json seperti apiFetch di atas, karena itu
+// akan merusak multipart/form-data. Biarkan browser yang set
+// Content-Type + boundary-nya secara otomatis.
+async function apiUploadFetch(path, formData) {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || `Upload gagal (${res.status})`);
+  }
+  return data;
+}
+
 export default function useEditorState(projectId) {
   const [mediaLibrary, setMediaLibrary] = useState([]);
   const [mediaLoading, setMediaLoading] = useState(true);
   const [mediaError, setMediaError] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   const [clips, setClips] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(true);
@@ -57,10 +66,10 @@ export default function useEditorState(projectId) {
         data.map((m) => ({
           id: m.id,
           name: m.name,
-          type: m.type.toLowerCase(), // backend: VIDEO/AUDIO/IMAGE -> video/audio/image
-          sourceDuration: m.duration ?? 5, // gambar tidak punya duration, default 5 detik
+          type: m.type.toLowerCase(),
+          sourceDuration: m.duration ?? 5,
           thumbnail: m.thumbnail ? `${API_BASE}${m.thumbnail}` : null,
-          url: `${API_BASE}${m.path}`, // dipakai Canvas/Preview untuk src video/gambar
+          url: `${API_BASE}${m.path}`,
         })),
       );
     } catch (err) {
@@ -70,6 +79,54 @@ export default function useEditorState(projectId) {
     }
   }, [projectId]);
 
+  // ---- Upload file media baru ke backend ----
+  // Endpoint: POST /media/upload (bukan POST /media — itu route GET)
+  const uploadMedia = useCallback(
+    async (file) => {
+      if (!projectId || !file) return;
+      setIsUploading(true);
+      setMediaError("");
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        // projectId dikirim lewat query string, BUKAN body FormData —
+        // karena backend baca pakai @Query('projectId')
+        const created = await apiUploadFetch(
+          `/media/upload?projectId=${encodeURIComponent(projectId)}`,
+          formData,
+        );
+
+        setMediaLibrary((prev) => [
+          ...prev,
+          {
+            id: created.id,
+            name: created.name,
+            type: created.type.toLowerCase(),
+            sourceDuration: created.duration ?? 5,
+            thumbnail: created.thumbnail ? `${API_BASE}${created.thumbnail}` : null,
+            url: `${API_BASE}${created.path}`,
+          },
+        ]);
+      } catch (err) {
+        alert(err.message || "Gagal mengunggah media");
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [projectId],
+  );
+
+  // ---- Hapus media dari library ----
+  const deleteMedia = useCallback(async (mediaId) => {
+    if (!mediaId) return;
+    try {
+      await apiFetch(`/media/${mediaId}`, { method: "DELETE" });
+      setMediaLibrary((prev) => prev.filter((m) => m.id !== mediaId));
+    } catch (err) {
+      alert(err.message || "Gagal menghapus media");
+    }
+  }, []);
+
   // ---- Ambil Timeline (semua track + clip) dari backend ----
   const loadTimeline = useCallback(async () => {
     if (!projectId) return;
@@ -77,8 +134,6 @@ export default function useEditorState(projectId) {
     setTimelineError("");
     try {
       const tracks = await apiFetch(`/projects/${projectId}/timeline`);
-      // Untuk sekarang UI masih menampilkan satu baris timeline saja,
-      // jadi seluruh clip dari semua track digabung & diurutkan waktunya.
       const flatClips = tracks
         .flatMap((track) => track.clips.map((clip) => ({ ...clip, trackType: track.type })))
         .sort((a, b) => a.timelineStart - b.timelineStart)
@@ -90,9 +145,9 @@ export default function useEditorState(projectId) {
           sourceDuration: clip.media?.duration ?? clip.outPoint,
           trimStart: clip.inPoint,
           trimEnd: clip.outPoint,
-          timelineStart: clip.timelineStart, // posisi asli dari backend, dipakai untuk layout
+          timelineStart: clip.timelineStart,
           trackType: clip.trackType,
-          url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null, // dipakai CanvasPreview
+          url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null,
         }));
       setClips(flatClips);
     } catch (err) {
@@ -107,8 +162,6 @@ export default function useEditorState(projectId) {
     loadTimeline();
   }, [loadMedia, loadTimeline]);
 
-  // Tambah clip baru ke timeline dari Media Library — memanggil backend,
-  // lalu clip hasil response (sudah punya id & timelineStart asli) dimasukkan ke state.
   const addClipToTimeline = useCallback(
     async (media) => {
       if (!projectId) return;
@@ -139,9 +192,6 @@ export default function useEditorState(projectId) {
     [projectId],
   );
 
-  // Hitung posisi (left) tiap clip berdasarkan timelineStart ASLI dari
-  // backend (bukan cumulative sum) — supaya jarak/gap antar clip hasil
-  // drag & drop ke posisi tertentu (Story 8) tetap tergambar benar.
   const clipsWithLayout = useMemo(() => {
     return clips.map((clip) => {
       const duration = clip.trimEnd - clip.trimStart;
@@ -165,11 +215,6 @@ export default function useEditorState(projectId) {
 
   const selectedClip = clipsWithLayout.find((c) => c.id === selectedClipId) || null;
 
-  // Story 12 — Trim Clip: update local state langsung (biar drag handle
-  // terasa responsif/real-time di Canvas & Timeline — Acceptance 5, 9),
-  // lalu kirim ke backend dengan DEBOUNCE 400ms supaya tidak mengirim
-  // request berkali-kali tiap piksel saat user masih menggeser handle —
-  // baru benar-benar tersimpan (Acceptance 8) begitu user berhenti drag.
   const trimTimersRef = useRef({});
 
   const updateClipTrim = useCallback(
@@ -183,9 +228,7 @@ export default function useEditorState(projectId) {
           let newStart = trimStart ?? clip.trimStart;
           let newEnd = trimEnd ?? clip.trimEnd;
 
-          // Acceptance 6: start tidak boleh >= end (jaga jarak minimum)
           newStart = Math.max(0, Math.min(newStart, clip.trimEnd - MIN_CLIP_DURATION));
-          // Acceptance 7: tidak boleh melebihi durasi media asli
           newEnd = Math.min(clip.sourceDuration, Math.max(newEnd, clip.trimStart + MIN_CLIP_DURATION));
 
           let timelineStartDelta = 0;
@@ -201,7 +244,7 @@ export default function useEditorState(projectId) {
         }),
       );
 
-      if (computedStart === undefined) return; // clip tidak ditemukan
+      if (computedStart === undefined) return;
 
       clearTimeout(trimTimersRef.current[clipId]);
       trimTimersRef.current[clipId] = setTimeout(async () => {
@@ -212,7 +255,7 @@ export default function useEditorState(projectId) {
           });
         } catch (err) {
           alert(err.message || "Gagal menyimpan hasil trim");
-          loadTimeline(); // sinkronkan ulang ke kondisi asli dari backend kalau gagal
+          loadTimeline();
         }
       }, 400);
     },
@@ -222,10 +265,6 @@ export default function useEditorState(projectId) {
   const selectClip = useCallback((clipId) => setSelectedClipId(clipId), []);
   const deselectClip = useCallback(() => setSelectedClipId(null), []);
 
-  // Story 9 — Split Clip: potong clip yang sedang dipilih, tepat di posisi
-  // playhead saat ini. Backend yang menghitung ulang metadata (start/end)
-  // kedua clip hasil potongan; setelah berhasil, timeline di-refresh penuh
-  // supaya Canvas/Preview & daftar clip otomatis ikut ter-update (Acceptance 9).
   const splitSelectedClip = useCallback(async () => {
     if (!selectedClip) return;
 
@@ -247,10 +286,6 @@ export default function useEditorState(projectId) {
     }
   }, [selectedClip, currentTime, loadTimeline, deselectClip]);
 
-  // Versi split yang menerima clipId & atTime langsung sebagai parameter —
-  // ini yang dipanggil TimelineEditor.jsx lewat prop "onSplitClip"
-  // (tombol Split bawaan TimelineEditor sudah punya validasi & clip
-  // terpilihnya sendiri, jadi cukup teruskan ke backend di sini).
   const splitClipAt = useCallback(
     async (clipId, atTime) => {
       if (!clipId) return;
@@ -268,16 +303,11 @@ export default function useEditorState(projectId) {
     [loadTimeline, deselectClip],
   );
 
-  // Dipakai untuk mengaktifkan/nonaktifkan tombol Split di UI —
-  // true hanya kalau ada clip terpilih DAN playhead ada di dalam rentangnya.
   const canSplit =
     !!selectedClip &&
     currentTime > selectedClip.timelineStart &&
     currentTime < selectedClip.timelineStart + selectedClip.duration;
 
-  // Hapus satu clip dari timeline (dipanggil TimelineEditor.jsx sebagai
-  // prop "onDelete"). Backend endpoint-nya sudah ada dari Story 8/9 kemarin:
-  // DELETE /projects/:projectId/timeline/clips/:clipId
   const deleteClip = useCallback(
     async (clipId) => {
       if (!projectId || !clipId) return;
@@ -294,8 +324,6 @@ export default function useEditorState(projectId) {
     [projectId, selectedClipId, deselectClip],
   );
 
-  // TODO: sama seperti trim, begitu endpoint Move Clip tersedia di backend,
-  // panggil API di sini supaya urutan/posisi baru tersimpan permanen.
   const reorderClip = useCallback((clipId, targetIndex) => {
     setClips((prev) => {
       const currentIndex = prev.findIndex((c) => c.id === clipId);
@@ -316,6 +344,9 @@ export default function useEditorState(projectId) {
     mediaLibrary,
     mediaLoading,
     mediaError,
+    isUploading,
+    uploadMedia,
+    deleteMedia,
     clips: clipsWithLayout,
     timelineLoading,
     timelineError,
