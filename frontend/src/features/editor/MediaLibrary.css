@@ -162,3 +162,21 @@
   background: #5b4fd1;
   color: #fff;
 }
+
+.media-item__delete {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #2a2e50;
+  color: #cfd0ec;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.media-item__delete:hover {
+  background: #e03131;
+  color: #fff;
+}

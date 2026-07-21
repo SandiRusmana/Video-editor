@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MediaType, TrackType } from '@prisma/client';
 
@@ -46,7 +46,6 @@ export class TimelineService {
           orderBy: { timelineStart: 'asc' },
           include: {
             media: {
-              // tambah field path supaya frontend tahu URL file aslinya
               select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
             },
           },
@@ -101,55 +100,170 @@ export class TimelineService {
     });
   }
 
-  // Hapus clip dari timeline berdasarkan clipId — pastikan clip memang milik
-  // project yang sama (lewat track.projectId) supaya tidak bisa hapus clip orang lain.
+  // Story 9: potong satu clip jadi dua pada posisi playhead (atTime).
+  // Prinsipnya: clip lama diperpendek (outPoint dipotong sampai titik split),
+  // lalu dibuat clip baru sebagai lanjutannya, mulai dari titik split itu.
+  // File media asli TIDAK disentuh — cuma metadata timeline yang berubah.
+  async splitClip(userId: string, clipId: string, atTime: number) {
+    const clip = await this.prisma.clip.findUnique({
+      where: { id: clipId },
+      include: { track: { include: { project: true } } },
+    });
+    if (!clip) throw new NotFoundException('Clip tidak ditemukan');
+    if (clip.track.project.ownerId !== userId) {
+      throw new ForbiddenException('Bukan pemilik project ini');
+    }
+
+    const clipEnd = clip.timelineStart + (clip.outPoint - clip.inPoint);
+
+    // Titik split harus berada di DALAM rentang clip, bukan pas di ujung
+    // (kalau pas di ujung, hasilnya salah satu clip berdurasi 0 — tidak masuk akal)
+    if (atTime <= clip.timelineStart + 0.05 || atTime >= clipEnd - 0.05) {
+      throw new BadRequestException('Posisi playhead harus berada di dalam rentang clip untuk melakukan split');
+    }
+
+    // Posisi split, diterjemahkan ke "detik di dalam file sumber media"
+    const localSplitPoint = clip.inPoint + (atTime - clip.timelineStart);
+    const originalOutPoint = clip.outPoint; // simpan dulu sebelum di-overwrite
+
+    // Clip pertama: dipendekkan, berakhir tepat di titik split
+    const firstClip = await this.prisma.clip.update({
+      where: { id: clipId },
+      data: { outPoint: localSplitPoint },
+      include: {
+        media: { select: { id: true, name: true, type: true, duration: true, thumbnail: true } },
+      },
+    });
+
+    // Clip kedua: kelanjutan dari titik split sampai akhir clip semula,
+    // media sumber & properti visual/audio disalin supaya konsisten dengan
+    // clip asalnya (Acceptance 5).
+    const secondClip = await this.prisma.clip.create({
+      data: {
+        trackId: clip.trackId,
+        mediaId: clip.mediaId,
+        timelineStart: atTime,
+        inPoint: localSplitPoint,
+        outPoint: originalOutPoint,
+        x: clip.x,
+        y: clip.y,
+        scale: clip.scale,
+        rotation: clip.rotation,
+        opacity: clip.opacity,
+        volume: clip.volume,
+        muted: clip.muted,
+        filter: clip.filter,
+      },
+      include: {
+        media: { select: { id: true, name: true, type: true, duration: true, thumbnail: true } },
+      },
+    });
+
+    return { first: firstClip, second: secondClip };
+  }
+
+  // Story 12: Trim clip dengan mengubah titik awal (inPoint) atau titik akhir (outPoint).
+  // Mengubah inPoint/outPoint tidak mengubah file media asli.
+  async trimClip(userId: string, clipId: string, dto: { inPoint?: number, outPoint?: number, timelineStart?: number }) {
+    const clip = await this.prisma.clip.findUnique({
+      where: { id: clipId },
+      include: { track: { include: { project: true } }, media: true },
+    });
+    if (!clip) throw new NotFoundException('Clip tidak ditemukan');
+    if (clip.track.project.ownerId !== userId) {
+      throw new ForbiddenException('Bukan pemilik project ini');
+    }
+
+    let { inPoint, outPoint, timelineStart } = dto;
+    
+    inPoint = inPoint ?? clip.inPoint;
+    outPoint = outPoint ?? clip.outPoint;
+    timelineStart = timelineStart ?? clip.timelineStart;
+
+    if (inPoint >= outPoint) {
+      throw new BadRequestException('Titik awal (start time) tidak boleh lebih besar atau sama dengan titik akhir (end time)');
+    }
+
+    const duration = clip.media?.duration ?? DEFAULT_IMAGE_DURATION;
+    if (outPoint > duration) {
+      throw new BadRequestException('Nilai trim tidak boleh melebihi durasi media asli');
+    }
+    
+    if (inPoint < 0) {
+      throw new BadRequestException('Titik awal tidak boleh kurang dari 0');
+    }
+
+    return this.prisma.clip.update({
+      where: { id: clipId },
+      data: { inPoint, outPoint, timelineStart },
+      include: {
+        media: { select: { id: true, name: true, type: true, duration: true, thumbnail: true } },
+      },
+    });
+  }
+
+  // Hapus satu clip dari timeline. File media aslinya tidak ikut terhapus
+  // (cuma clip-nya, medianya tetap ada di Media Library).
   async deleteClip(userId: string, projectId: string, clipId: string) {
     await this.assertProjectOwnership(userId, projectId);
 
     const clip = await this.prisma.clip.findUnique({
       where: { id: clipId },
-      include: { track: { select: { projectId: true } } },
+      include: { track: true },
     });
     if (!clip) throw new NotFoundException('Clip tidak ditemukan');
     if (clip.track.projectId !== projectId) {
       throw new ForbiddenException('Clip ini bukan bagian dari project yang dimaksud');
     }
 
-    await this.prisma.clip.delete({ where: { id: clipId } });
-    return { message: 'Clip berhasil dihapus' };
+    return this.prisma.clip.delete({ where: { id: clipId } });
   }
 
-  // Story 8: Urutkan dan update timelineStart secara berurutan agar tidak nimpa (magnetic)
+  // Susun ulang urutan beberapa clip (Move Clip). `clipIds` dikirim sesuai
+  // urutan BARU yang diinginkan user — backend menghitung ulang posisi
+  // (timelineStart) masing-masing supaya berurutan nempel sesuai urutan itu.
+  // Catatan: semua clip yang di-reorder harus berada di track yang sama.
   async reorderClips(userId: string, projectId: string, clipIds: string[]) {
     await this.assertProjectOwnership(userId, projectId);
 
-    // Ambil HANYA clip yang benar-benar ada di project ini (filter by clipIds juga)
+    if (!clipIds.length) return [];
+
     const clips = await this.prisma.clip.findMany({
-      where: {
-        id: { in: clipIds },      // hanya proses clipId yang dikirim frontend
-        track: { projectId },     // pastikan clip memang milik project ini
-      },
+      where: { id: { in: clipIds } },
+      include: { track: true },
     });
 
-    // Buat map id -> clip agar lookup O(1)
-    const clipMap = new Map(clips.map((c) => [c.id, c]));
-
-    let currentStart = 0;
-    for (const id of clipIds) {
-      const clip = clipMap.get(id);
-      if (!clip) continue; // clip sudah dihapus atau tidak valid, lewati saja
-
-      const duration = clip.outPoint - clip.inPoint;
-
-      // updateMany tidak throw P2025 jika record tidak ditemukan (aman dari race condition)
-      await this.prisma.clip.updateMany({
-        where: { id, track: { projectId } },
-        data: { timelineStart: currentStart },
-      });
-
-      currentStart += duration;
+    if (clips.length !== clipIds.length) {
+      throw new NotFoundException('Salah satu atau lebih clip tidak ditemukan');
+    }
+    for (const clip of clips) {
+      if (clip.track.projectId !== projectId) {
+        throw new ForbiddenException('Salah satu clip bukan bagian dari project yang dimaksud');
+      }
+    }
+    const trackId = clips[0].trackId;
+    if (clips.some((c) => c.trackId !== trackId)) {
+      throw new BadRequestException('Semua clip yang di-reorder harus berada di track yang sama');
     }
 
-    return { message: 'Urutan clip berhasil diperbarui' };
+    // Hitung ulang posisi tiap clip secara berurutan sesuai urutan
+    // clipIds yang dikirim, saling nempel tanpa celah (nose-to-tail).
+    let cursor = 0;
+    const updated: any[] = [];
+    for (const id of clipIds) {
+      const clip = clips.find((c) => c.id === id)!;
+      const duration = clip.outPoint - clip.inPoint;
+      const result = await this.prisma.clip.update({
+        where: { id },
+        data: { timelineStart: cursor },
+        include: {
+          media: { select: { id: true, name: true, type: true, duration: true, thumbnail: true } },
+        },
+      });
+      updated.push(result);
+      cursor += duration;
+    }
+
+    return updated;
   }
 }

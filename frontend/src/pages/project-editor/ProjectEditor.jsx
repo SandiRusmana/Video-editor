@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import MediaLibrary from "../../features/editor/MediaLibrary";
 import CanvasPreview from "../../features/editor/CanvasPreview";
 import PropertiesPanel from "../../features/editor/PropertiesPanel";
@@ -20,18 +20,41 @@ export default function ProjectEditor({
     deselectClip,
     updateClipTrim,
     addClipToTimeline,
-    deleteClip,
     reorderClip,
+    deleteClip,
+    splitClipAt,
     currentTime,
     setCurrentTime,
     isPlaying,
     setIsPlaying,
-    uploadMedia,
   } = useEditorState(projectId);
 
   const [projectName, setProjectName] = useState(initialProjectName || "Konten YouTube");
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(initialProjectName || "Konten YouTube");
+  
+  const [userName, setUserName] = useState("User");
+  const isSeeking = useRef(false);
+  const [seekGeneration, setSeekGeneration] = useState(0);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("http://localhost:3000/auth/me", {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.email) {
+          const emailPrefix = data.email.split("@")[0];
+          const name = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+          setUserName(name);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const startEditingName = () => {
     setNameDraft(projectName);
@@ -44,10 +67,20 @@ export default function ProjectEditor({
     setIsEditingName(false);
   };
 
+
   // Dipanggil saat file di-drop dari Media Library ke Timeline
   const handleDropMedia = (mediaId) => {
     const media = mediaLibrary.find((m) => m.id === mediaId);
     if (media) addClipToTimeline(media);
+  };
+  
+  const handleSeekStart = () => {
+    isSeeking.current = true;
+  };
+
+  const handleSeekEnd = () => {
+    isSeeking.current = false;
+    setSeekGeneration(prev => prev + 1);
   };
 
   return (
@@ -84,18 +117,15 @@ export default function ProjectEditor({
             </span>
           )}
         </nav>
+
         <div className="project-editor__user">
-          <span>👤 Asep</span>
+          <span>👤 {userName}</span>
           <button className="btn btn--ghost btn--sm">Logout</button>
         </div>
       </header>
 
       <div className="project-editor__body">
-        <MediaLibrary
-          mediaList={mediaLibrary}
-          onAddToTimeline={addClipToTimeline}
-          onUploadMedia={uploadMedia}
-        />
+        <MediaLibrary mediaList={mediaLibrary} onAddToTimeline={addClipToTimeline} />
         <CanvasPreview
           currentTime={currentTime}
           totalDuration={totalDuration}
@@ -103,6 +133,8 @@ export default function ProjectEditor({
           onTogglePlay={() => setIsPlaying((p) => !p)}
           onSeek={setCurrentTime}
           clips={clips}
+          isSeeking={isSeeking}
+          seekGeneration={seekGeneration}
         />
         <PropertiesPanel clip={selectedClip} onUpdateTrim={updateClipTrim} />
       </div>
@@ -119,6 +151,9 @@ export default function ProjectEditor({
         onDropMedia={handleDropMedia}
         onReorderClip={reorderClip}
         onDeleteClip={deleteClip}
+        onSplitClip={splitClipAt}
+        onSeekStart={handleSeekStart}
+        onSeekEnd={handleSeekEnd}
       />
     </div>
   );

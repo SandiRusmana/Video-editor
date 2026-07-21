@@ -31,7 +31,7 @@ function TrimHandle({ side, onDragStart }) {
   );
 }
 
-function Playhead({ currentTime, totalDuration, onSeek }) {
+function Playhead({ currentTime, totalDuration, onSeek, onSeekStart, onSeekEnd }) {
   const dragRef = useRef(null);
 
   const handleDragStart = useCallback(
@@ -40,6 +40,7 @@ function Playhead({ currentTime, totalDuration, onSeek }) {
       const startX = e.clientX;
       const startTime = currentTime;
       dragRef.current = { startX, startTime };
+      onSeekStart?.();
 
       const handleMouseMove = (moveEvent) => {
         const deltaPx = moveEvent.clientX - dragRef.current.startX;
@@ -51,12 +52,13 @@ function Playhead({ currentTime, totalDuration, onSeek }) {
       const handleMouseUp = () => {
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        onSeekEnd?.();
       };
 
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     },
-    [currentTime, totalDuration, onSeek]
+    [currentTime, totalDuration, onSeek, onSeekStart, onSeekEnd]
   );
 
   // Ditambahkan offset 80px agar sejajar dengan posisi awal lane
@@ -150,12 +152,24 @@ export default function TimelineEditor({
   onDropMedia,
   onReorderClip,
   onDeleteClip,
+  onSeekStart,
+  onSeekEnd,
+  onSplitClip,
 }) {
   const ruler = buildRuler(Math.max(totalDuration, 40));
   const [dragOverTrack, setDragOverTrack] = useState(null); // 'VIDEO' | 'AUDIO' | 'EMPTY' | null
 
   const videoClips = clips.filter((c) => c.trackType === "VIDEO");
   const audioClips = clips.filter((c) => c.trackType === "AUDIO");
+
+  // Tombol Split aktif hanya jika: ada clip dipilih DAN playhead
+  // berada DALAM rentang clip itu (dengan margin 0.05s di tiap ujung
+  // untuk mencegah split di posisi pas awal/akhir clip).
+  const selectedClip = clips.find((c) => c.id === selectedClipId) || null;
+  const canSplit =
+    selectedClip !== null &&
+    currentTime > selectedClip.timelineStart + 0.05 &&
+    currentTime < selectedClip.timelineStart + selectedClip.duration - 0.05;
 
   // Ditambah offset 80px dari lebar label kolom kiri
   const timelineWidth = 80 + Math.max(totalDuration, 40) * PIXELS_PER_SECOND;
@@ -165,7 +179,10 @@ export default function TimelineEditor({
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const newTime = Math.max(0, Math.min(totalDuration, clickX / PIXELS_PER_SECOND));
+    onSeekStart?.();
     onSeek(newTime);
+    // Lane click selesai seketika (bukan drag), langsung release
+    setTimeout(() => onSeekEnd?.(), 100);
   };
 
   const handleDragOver = (e, trackType) => {
@@ -184,7 +201,7 @@ export default function TimelineEditor({
     if (clipId) {
       const rect = e.currentTarget.getBoundingClientRect();
       const dropX = e.clientX - rect.left;
-      
+
       const trackClips = trackType === "VIDEO" ? videoClips : audioClips;
       let targetIndex = trackClips.length;
       for (let i = 0; i < trackClips.length; i++) {
@@ -206,12 +223,26 @@ export default function TimelineEditor({
     <section className="timeline-editor">
       <div className="timeline-editor__header">
         <h3>TIMELINE EDITOR</h3>
-        <span className="timeline-editor__total">{formatTime(totalDuration)} total</span>
+        <div className="timeline-editor__header-actions">
+          <button
+            className={`timeline-editor__btn-split${canSplit ? " timeline-editor__btn-split--active" : ""}`}
+            onClick={() => canSplit && onSplitClip(selectedClipId, currentTime)}
+            disabled={!canSplit}
+            title={
+              canSplit
+                ? "Potong clip di posisi playhead"
+                : "Pilih sebuah clip lalu posisikan playhead di tengahnya untuk memotong"
+            }
+          >
+            ✂️ Split
+          </button>
+          <span className="timeline-editor__total">{formatTime(totalDuration)} total</span>
+        </div>
       </div>
 
       <div className="timeline-editor__viewport">
         <div className="timeline-editor__content-wrapper" style={{ width: timelineWidth }}>
-          
+
           <div className="timeline-editor__ruler">
             {ruler.map((t) => (
               <span key={t} className="timeline-editor__mark" style={{ left: 80 + t * PIXELS_PER_SECOND }}>
@@ -283,7 +314,13 @@ export default function TimelineEditor({
           )}
 
           {clips.length > 0 && (
-            <Playhead currentTime={currentTime} totalDuration={totalDuration} onSeek={onSeek} />
+            <Playhead
+              currentTime={currentTime}
+              totalDuration={totalDuration}
+              onSeek={onSeek}
+              onSeekStart={onSeekStart}
+              onSeekEnd={onSeekEnd}
+            />
           )}
 
         </div>
