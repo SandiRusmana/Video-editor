@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import "./dashboard.css";
 // Sesuaikan nama file logo dengan yang ada di folder assets kamu
 import logo from "../../assets/logo.png";
-import MediaPage from "./MediaPage";
-import SettingsPage from "./SettingsPage";
+import MediaPage from "./media/MediaPage";
+import SettingsPage from "./setting/SettingsPage";
 
 const API_BASE = "http://localhost:3000";
 

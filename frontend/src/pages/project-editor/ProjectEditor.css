@@ -97,3 +97,19 @@
   min-height: 0;
   overflow: hidden;
 }
+.logout-confirm__overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.logout-confirm__box {
+  background: #131635;
+  border: 1px solid #2a2e50;
+  padding: 24px; border-radius: 10px;
+  text-align: center; min-width: 260px;
+  color: #e4e5f5;
+}
+.logout-confirm__actions {
+  display: flex; gap: 12px; justify-content: center; margin-top: 16px;
+}

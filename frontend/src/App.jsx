@@ -6,7 +6,9 @@ import Dashboard from "./fitur/fitur-dashboard/dashboard.jsx";
 import ProjectEditor from "./pages/project-editor/ProjectEditor.jsx";
 
 function App() {
-  const [halaman, setHalaman] = useState("landing");
+  const [halaman, setHalaman] = useState(() =>
+  localStorage.getItem("token") ? "dashboard" : "landing"
+);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState("");
 
@@ -22,17 +24,17 @@ function App() {
 
       {/* 2. Kondisi pas tampil halaman Login */}
       {halaman === "login" && (
-        <Login 
-          onLoginBerhasil={() => setHalaman("dashboard")} 
-          onPindahKeRegister={() => setHalaman("register")} 
+        <Login
+          onLoginBerhasil={() => setHalaman("dashboard")}
+          onPindahKeRegister={() => setHalaman("register")}
         />
       )}
 
       {/* 3. Kondisi pas tampil halaman Register */}
       {halaman === "register" && (
-        <Register 
-          onRegisterBerhasil={() => setHalaman("dashboard")} 
-          onPindahKeLogin={() => setHalaman("login")} 
+        <Register
+          onRegisterBerhasil={() => setHalaman("dashboard")}
+          onPindahKeLogin={() => setHalaman("login")}
         />
       )}
 
@@ -53,6 +55,7 @@ function App() {
           projectId={selectedProjectId}
           initialProjectName={selectedProjectName}
           onKembaliKeDashboard={() => setHalaman("dashboard")}
+          onLogout={() => setHalaman("landing")}
         />
       )}
     </div>

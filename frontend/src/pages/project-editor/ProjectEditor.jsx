@@ -10,6 +10,7 @@ export default function ProjectEditor({
   projectId,
   initialProjectName = "Konten YouTube",
   onKembaliKeDashboard,
+  onLogout,
 }) {
   const {
     mediaLibrary,
@@ -36,6 +37,7 @@ export default function ProjectEditor({
   const [nameDraft, setNameDraft] = useState(initialProjectName || "Konten YouTube");
 
   const [userName, setUserName] = useState("User");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const isSeeking = useRef(false);
   const [seekGeneration, setSeekGeneration] = useState(0);
 
@@ -83,6 +85,20 @@ export default function ProjectEditor({
     setSeekGeneration((prev) => prev + 1);
   };
 
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
+    localStorage.removeItem("token");
+    if (onLogout) onLogout();
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
+
   return (
     <div className="project-editor">
       <header className="project-editor__header">
@@ -120,7 +136,9 @@ export default function ProjectEditor({
 
         <div className="project-editor__user">
           <span>👤 {userName}</span>
-          <button className="btn btn--ghost btn--sm">Logout</button>
+          <button className="btn btn--ghost btn--sm" onClick={handleLogoutClick}>
+            Logout
+          </button>
         </div>
       </header>
 
@@ -160,6 +178,22 @@ export default function ProjectEditor({
         onSeekStart={handleSeekStart}
         onSeekEnd={handleSeekEnd}
       />
+
+      {showLogoutConfirm && (
+        <div className="logout-confirm__overlay">
+          <div className="logout-confirm__box">
+            <p>Yakin mau logout?</p>
+            <div className="logout-confirm__actions">
+              <button className="btn btn--primary btn--sm" onClick={confirmLogout}>
+                Yes
+              </button>
+              <button className="btn btn--ghost btn--sm" onClick={cancelLogout}>
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
