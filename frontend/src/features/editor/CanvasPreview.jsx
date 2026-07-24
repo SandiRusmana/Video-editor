@@ -56,7 +56,7 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
     const videoEl = videoRef.current;
     if (!videoEl || !src || !isVideo) return;
     if (isPlaying) {
-      if (videoEl.readyState > 0) {
+      if (videoEl.readyState >= 1) {
         videoEl.play().catch((err) => console.log("Autoplay blocked or interrupted:", err));
       }
     } else {
@@ -141,8 +141,37 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
     const targetInFile = (activeClip.trimStart ?? 0) + clipOffset;
 
     videoEl.currentTime = targetInFile;
-    if (isPlaying) {
+    if (isPlaying && videoEl.paused) {
       videoEl.play().catch((err) => console.log("Autoplay on load failed:", err));
+    }
+  };
+
+  const handleCanPlay = (e) => {
+    const videoEl = e.target;
+    if (!activeClip || !isVideo) return;
+
+    const clipOffset = Math.max(0, currentTime - activeClip.timelineStart);
+    const targetInFile = (activeClip.trimStart ?? 0) + clipOffset;
+
+    if (Math.abs(videoEl.currentTime - targetInFile) > 0.1) {
+      videoEl.currentTime = targetInFile;
+    }
+
+    if (isPlaying && videoEl.paused) {
+      videoEl.play().catch((err) => console.log("Autoplay on canplay failed:", err));
+    }
+  };
+
+  const handleEnded = () => {
+    if (!isPlaying || !activeClip || !isVideo) return;
+    const clipDuration = activeClip.trimEnd - activeClip.trimStart;
+    const nextTime = activeClip.timelineStart + clipDuration;
+
+    if (nextTime < totalDuration) {
+      onSeek(nextTime);
+    } else {
+      onSeek(totalDuration);
+      onTogglePlay();
     }
   };
 
@@ -160,12 +189,56 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
     }
   };
 
+  const handleAudioCanPlay = (e) => {
+    const audioEl = e.target;
+    if (!activeAudioClip) return;
+
+    const clipOffset = Math.max(0, currentTime - activeAudioClip.timelineStart);
+    const targetInFile = (activeAudioClip.trimStart ?? 0) + clipOffset;
+
+    if (Math.abs(audioEl.currentTime - targetInFile) > 0.1) {
+      audioEl.currentTime = targetInFile;
+    }
+
+    if (isPlaying && audioEl.paused) {
+      audioEl.play().catch((err) => console.log("Audio autoplay on canplay failed:", err));
+    }
+  };
+
+  const handleAudioEnded = () => {
+    if (!isPlaying || !activeAudioClip) return;
+    const clipDuration = activeAudioClip.trimEnd - activeAudioClip.trimStart;
+    const nextTime = activeAudioClip.timelineStart + clipDuration;
+
+    if (nextTime < totalDuration) {
+      onSeek(nextTime);
+    } else {
+      onSeek(totalDuration);
+      onTogglePlay();
+    }
+  };
+
   // Video berjalan sendiri -> update playhead di timeline
   const handleTimeUpdate = (e) => {
     if (e.target.seeking) return;
     if (isSeeking?.current) return; // user sedang drag/seek manual
     if (!isPlaying || !activeClip || !isVideo) return;
+
     const clipOffset = e.target.currentTime - (activeClip.trimStart ?? 0);
+    const clipDuration = activeClip.trimEnd - activeClip.trimStart;
+
+    // Jika video element melewati batas trimEnd dari clip saat ini
+    if (clipOffset >= clipDuration) {
+      const nextTime = activeClip.timelineStart + clipDuration;
+      if (nextTime < totalDuration) {
+        onSeek(nextTime);
+      } else {
+        onSeek(totalDuration);
+        onTogglePlay();
+      }
+      return;
+    }
+
     const newTime = activeClip.timelineStart + Math.max(0, clipOffset);
 
     if (newTime <= totalDuration) {
@@ -180,7 +253,21 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
     if (e.target.seeking) return;
     if (isSeeking?.current) return; // user sedang drag/seek manual
     if (!isPlaying || !activeAudioClip) return;
+
     const clipOffset = e.target.currentTime - (activeAudioClip.trimStart ?? 0);
+    const clipDuration = activeAudioClip.trimEnd - activeAudioClip.trimStart;
+
+    if (clipOffset >= clipDuration) {
+      const nextTime = activeAudioClip.timelineStart + clipDuration;
+      if (nextTime < totalDuration) {
+        onSeek(nextTime);
+      } else {
+        onSeek(totalDuration);
+        onTogglePlay();
+      }
+      return;
+    }
+
     const newTime = activeAudioClip.timelineStart + Math.max(0, clipOffset);
 
     if (newTime <= totalDuration) {
@@ -241,6 +328,8 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
                 muted={Boolean(audioSrc)}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
+                onCanPlay={handleCanPlay}
+                onEnded={handleEnded}
               />
             ) : isImage ? (
               <img
@@ -268,6 +357,8 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
             style={{ display: "none" }}
             onTimeUpdate={handleAudioTimeUpdate}
             onLoadedMetadata={handleAudioLoadedMetadata}
+            onCanPlay={handleAudioCanPlay}
+            onEnded={handleAudioEnded}
           />
         )}
       </div>
