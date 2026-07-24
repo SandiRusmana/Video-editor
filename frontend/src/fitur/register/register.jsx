@@ -33,7 +33,11 @@ function Register({ onRegisterBerhasil, onPindahKeLogin }) {
         throw new Error(errMsg || "Gagal mendaftar");
       }
 
-      alert("Pendaftaran berhasil! Silakan masuk dengan akun Anda.");
+      if (data.access_token) {
+        localStorage.setItem("token", data.access_token);
+      }
+
+      alert("Pendaftaran berhasil!");
       
       // Memanggil fungsi operan dari branch kamu atau kembali ke login
       if (onRegisterBerhasil) {
