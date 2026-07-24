@@ -46,6 +46,7 @@ function App() {
             setSelectedProjectName(projectName);
             setHalaman("editor");
           }}
+          onLogout={() => setHalaman("landing")}
         />
       )}
 

@@ -159,12 +159,15 @@ function formatTanggal(isoString) {
   return `${dd}-${mm}-${yy}`;
 }
 
-export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProject }) {
+export default function Dashboard({ onBukaProject, onLogout }) {
   const [activeTab, setActiveTab] = useState("projects"); // "projects" | "media" | "settings"
   const [projects, setProjects] = useState([]);
+  const [namaUser, setNamaUser] = useState("Pengguna");
+  const [logoUser, setLogoUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef(null);
 
   const sumberLogo = logoUser || logo;
@@ -174,20 +177,33 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
   useEffect(() => {
     let isMounted = true;
 
-    async function loadProjects() {
+    async function loadData() {
       setLoading(true);
       setErrorMsg("");
       try {
+        // Ambil info user
+        const userData = await apiFetch("/auth/me");
+        if (isMounted && userData) {
+          if (userData.name) {
+            setNamaUser(userData.name);
+          } else if (userData.email) {
+            const emailPrefix = userData.email.split("@")[0];
+            const fallbackName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+            setNamaUser(fallbackName);
+          }
+        }
+
+        // Ambil projects
         const data = await apiFetch("/projects");
         if (isMounted) setProjects(data);
       } catch (err) {
-        if (isMounted) setErrorMsg(err.message || "Gagal memuat daftar project");
+        if (isMounted) setErrorMsg(err.message || "Gagal memuat data");
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    loadProjects();
+    loadData();
     return () => {
       isMounted = false;
     };
@@ -252,6 +268,11 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    if (onLogout) onLogout();
+  };
+
   return (
     <div className="app-shell">
       {/* Header */}
@@ -259,9 +280,24 @@ export default function Dashboard({ namaUser = "Pengguna", logoUser, onBukaProje
         <div className="brand">
           <img src={sumberLogo} alt="Logo" className="brand-logo" />
         </div>
-        <div className="user-info">
+        <div 
+          className="user-info" 
+          onClick={() => setShowUserMenu(!showUserMenu)}
+          style={{ cursor: "pointer", position: "relative" }}
+        >
           <div className="avatar">{inisialUser}</div>
           <span className="user-name">{namaUser}</span>
+          
+          {showUserMenu && (
+            <div className="dropdown-menu" style={{ position: "absolute", top: "100%", right: 0, marginTop: "8px", zIndex: 10 }}>
+              <button 
+                className="dropdown-item dropdown-item-danger" 
+                onClick={handleLogout}
+              >
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

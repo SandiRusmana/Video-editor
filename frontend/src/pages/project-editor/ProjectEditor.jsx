@@ -65,10 +65,34 @@ export default function ProjectEditor({
     setIsEditingName(true);
   };
 
-  const commitName = () => {
+  // Simpan perubahan nama project ke backend (PATCH /projects/:id) —
+  // sebelumnya cuma ubah state lokal, jadi tidak pernah tersimpan ke
+  // database dan hilang lagi begitu balik ke Dashboard.
+  const commitName = async () => {
     const trimmed = nameDraft.trim();
-    if (trimmed) setProjectName(trimmed);
     setIsEditingName(false);
+
+    if (!trimmed || trimmed === projectName) return;
+
+    const previousName = projectName;
+    setProjectName(trimmed); // update tampilan langsung (optimistic)
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:3000/projects/${projectId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || `Gagal menyimpan nama (${res.status})`);
+    } catch (err) {
+      alert(err.message || "Gagal mengubah nama project");
+      setProjectName(previousName); // batalkan tampilan kalau gagal disimpan
+    }
   };
 
   const handleDropMedia = (mediaId) => {

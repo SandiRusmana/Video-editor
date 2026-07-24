@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import "./CanvasPreview.css";
 
 function formatTime(sec) {
@@ -10,6 +10,7 @@ function formatTime(sec) {
 export default function CanvasPreview({ currentTime, totalDuration, isPlaying, onTogglePlay, onSeek, clips = [], isSeeking, seekGeneration }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
+  const [aspectRatio, setAspectRatio] = useState(null);
 
   // Cari clip yang aktif berdasarkan posisi playhead saat ini (hanya video/image)
   const activeClip = clips.find(
@@ -130,6 +131,10 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
   // Eksekusi ketika file video selesai memuat metadata
   const handleLoadedMetadata = (e) => {
     const videoEl = e.target;
+    if (videoEl.videoWidth && videoEl.videoHeight) {
+      setAspectRatio(`${videoEl.videoWidth} / ${videoEl.videoHeight}`);
+    }
+    
     if (!activeClip || !isVideo) return;
 
     const clipOffset = Math.max(0, currentTime - activeClip.timelineStart);
@@ -222,34 +227,38 @@ export default function CanvasPreview({ currentTime, totalDuration, isPlaying, o
       </div>
 
       <div className="canvas-preview__stage">
-        {src ? (
-          isVideo ? (
-            <video
-              ref={videoRef}
-              className="canvas-preview__video"
-              src={src}
-              playsInline
-              muted={Boolean(audioSrc)}
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-            />
-          ) : isImage ? (
-            <img
-              className="canvas-preview__image"
-              src={src}
-              alt={activeClip.name}
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            />
+        <div 
+          className="canvas-preview__inner" 
+          style={{ '--ratio': aspectRatio || '16/9' }}
+        >
+          {src ? (
+            isVideo ? (
+              <video
+                ref={videoRef}
+                className="canvas-preview__video"
+                src={src}
+                playsInline
+                muted={Boolean(audioSrc)}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+              />
+            ) : isImage ? (
+              <img
+                className="canvas-preview__image"
+                src={src}
+                alt={activeClip.name}
+              />
+            ) : (
+              <span className="canvas-preview__placeholder canvas-preview__placeholder--muted">
+                Format tidak didukung
+              </span>
+            )
           ) : (
             <span className="canvas-preview__placeholder canvas-preview__placeholder--muted">
-              Format tidak didukung
+              {totalDuration > 0 ? "Pilih clip untuk diputar" : "Belum ada clip untuk ditampilkan"}
             </span>
-          )
-        ) : (
-          <span className="canvas-preview__placeholder canvas-preview__placeholder--muted">
-            {totalDuration > 0 ? "Pilih clip untuk diputar" : "Belum ada clip untuk ditampilkan"}
-          </span>
-        )}
+          )}
+        </div>
 
         {audioSrc && (
           <audio
