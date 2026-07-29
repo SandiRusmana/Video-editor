@@ -21,10 +21,7 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
-// Fetch khusus untuk upload file (FormData) — TIDAK boleh set header
-// Content-Type: application/json seperti apiFetch di atas, karena itu
-// akan merusak multipart/form-data. Biarkan browser yang set
-// Content-Type + boundary-nya secara otomatis.
+// Fetch khusus untuk upload file (FormData)
 async function apiUploadFetch(path, formData) {
   const token = localStorage.getItem("token");
   const res = await fetch(`${API_BASE}${path}`, {
@@ -47,6 +44,7 @@ export default function useEditorState(projectId) {
   const [mediaError, setMediaError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
+  const [tracks, setTracks] = useState([]);
   const [clips, setClips] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(true);
   const [timelineError, setTimelineError] = useState("");
@@ -80,7 +78,6 @@ export default function useEditorState(projectId) {
   }, [projectId]);
 
   // ---- Upload file media baru ke backend ----
-  // Endpoint: POST /media/upload (bukan POST /media — itu route GET)
   const uploadMedia = useCallback(
     async (file) => {
       if (!projectId || !file) return;
@@ -89,8 +86,6 @@ export default function useEditorState(projectId) {
       try {
         const formData = new FormData();
         formData.append("file", file);
-        // projectId dikirim lewat query string, BUKAN body FormData —
-        // karena backend baca pakai @Query('projectId')
         const created = await apiUploadFetch(
           `/media/upload?projectId=${encodeURIComponent(projectId)}`,
           formData,
@@ -133,22 +128,37 @@ export default function useEditorState(projectId) {
     setTimelineLoading(true);
     setTimelineError("");
     try {
-      const tracks = await apiFetch(`/projects/${projectId}/timeline`);
-      const flatClips = tracks
-        .flatMap((track) => track.clips.map((clip) => ({ ...clip, trackType: track.type })))
-        .sort((a, b) => a.timelineStart - b.timelineStart)
-        .map((clip) => ({
-          id: clip.id,
-          mediaId: clip.mediaId,
-          name: clip.media?.name ?? "(media tidak ditemukan)",
-          type: (clip.media?.type ?? "video").toLowerCase(),
-          sourceDuration: clip.media?.duration ?? clip.outPoint,
-          trimStart: clip.inPoint,
-          trimEnd: clip.outPoint,
-          timelineStart: clip.timelineStart,
-          trackType: clip.trackType,
-          url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null,
-        }));
+      const trackData = await apiFetch(`/projects/${projectId}/timeline`);
+      setTracks(trackData);
+
+      const flatClips = trackData
+        .flatMap((track) =>
+          track.clips.map((clip) => {
+            const isText = track.type === "TEXT" || !!clip.textContent;
+            return {
+              ...clip,
+              trackId: track.id,
+              trackName: track.name || `${track.type} Track`,
+              trackType: track.type,
+              trackOrder: track.order,
+              mediaId: clip.mediaId,
+              name: isText
+                ? clip.textContent || "Teks Baru"
+                : clip.media?.name ?? "(media tidak ditemukan)",
+              type: isText ? "text" : (clip.media?.type ?? "video").toLowerCase(),
+              sourceDuration: isText ? 9999 : (clip.media?.duration ?? clip.outPoint),
+              trimStart: clip.inPoint,
+              trimEnd: clip.outPoint,
+              timelineStart: clip.timelineStart,
+              textContent: clip.textContent,
+              fontSize: clip.fontSize ?? 36,
+              fontColor: clip.fontColor ?? "#ffffff",
+              url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null,
+            };
+          }),
+        )
+        .sort((a, b) => a.timelineStart - b.timelineStart);
+
       setClips(flatClips);
     } catch (err) {
       setTimelineError(err.message || "Gagal memuat Timeline");
@@ -162,34 +172,48 @@ export default function useEditorState(projectId) {
     loadTimeline();
   }, [loadMedia, loadTimeline]);
 
+  // Tambah clip media ke track
   const addClipToTimeline = useCallback(
-    async (media) => {
+    async (media, targetTrackId) => {
       if (!projectId) return;
       try {
-        const created = await apiFetch(`/projects/${projectId}/timeline/clips`, {
+        await apiFetch(`/projects/${projectId}/timeline/clips`, {
           method: "POST",
-          body: JSON.stringify({ mediaId: media.id }),
+          body: JSON.stringify({
+            mediaId: media.id,
+            ...(targetTrackId ? { trackId: targetTrackId } : {}),
+          }),
         });
-        setClips((prev) => [
-          ...prev,
-          {
-            id: created.id,
-            mediaId: created.mediaId,
-            name: created.media?.name ?? media.name,
-            type: (created.media?.type ?? media.type).toLowerCase(),
-            sourceDuration: created.media?.duration ?? created.outPoint,
-            trimStart: created.inPoint,
-            trimEnd: created.outPoint,
-            timelineStart: created.timelineStart,
-            trackType: created.track?.type ?? (media.type === "audio" ? "AUDIO" : "VIDEO"),
-            url: created.media?.path ? `${API_BASE}${created.media.path}` : media.url,
-          },
-        ]);
+        await loadTimeline();
       } catch (err) {
         alert(err.message || "Gagal menambahkan media ke timeline");
       }
     },
-    [projectId],
+    [projectId, loadTimeline],
+  );
+
+  // Tambah text clip ke DB
+  const addTextClip = useCallback(
+    async (opts = {}) => {
+      if (!projectId) return;
+      try {
+        const created = await apiFetch(`/projects/${projectId}/timeline/clips`, {
+          method: "POST",
+          body: JSON.stringify({
+            textContent: opts.textContent || "Teks Baru",
+            trackId: opts.trackId,
+            trackType: "TEXT",
+            timelineStart: opts.timelineStart ?? currentTime,
+            duration: opts.duration ?? 5,
+          }),
+        });
+        await loadTimeline();
+        setSelectedClipId(created.id);
+      } catch (err) {
+        alert(err.message || "Gagal menambahkan teks ke timeline");
+      }
+    },
+    [projectId, currentTime, loadTimeline],
   );
 
   const clipsWithLayout = useMemo(() => {
@@ -229,7 +253,10 @@ export default function useEditorState(projectId) {
           let newEnd = trimEnd ?? clip.trimEnd;
 
           newStart = Math.max(0, Math.min(newStart, clip.trimEnd - MIN_CLIP_DURATION));
-          newEnd = Math.min(clip.sourceDuration, Math.max(newEnd, clip.trimStart + MIN_CLIP_DURATION));
+          newEnd = Math.min(
+            clip.sourceDuration || 9999,
+            Math.max(newEnd, clip.trimStart + MIN_CLIP_DURATION),
+          );
 
           let timelineStartDelta = 0;
           if (trimStart !== undefined) {
@@ -240,7 +267,12 @@ export default function useEditorState(projectId) {
           computedEnd = newEnd;
           computedTimelineStart = clip.timelineStart + timelineStartDelta;
 
-          return { ...clip, trimStart: newStart, trimEnd: newEnd, timelineStart: computedTimelineStart };
+          return {
+            ...clip,
+            trimStart: newStart,
+            trimEnd: newEnd,
+            timelineStart: computedTimelineStart,
+          };
         }),
       );
 
@@ -251,13 +283,56 @@ export default function useEditorState(projectId) {
         try {
           await apiFetch(`/clips/${clipId}/trim`, {
             method: "PATCH",
-            body: JSON.stringify({ inPoint: computedStart, outPoint: computedEnd, timelineStart: computedTimelineStart }),
+            body: JSON.stringify({
+              inPoint: computedStart,
+              outPoint: computedEnd,
+              timelineStart: computedTimelineStart,
+            }),
           });
         } catch (err) {
           alert(err.message || "Gagal menyimpan hasil trim");
           loadTimeline();
         }
       }, 400);
+    },
+    [loadTimeline],
+  );
+
+  const updateClipProperties = useCallback(
+    async (clipId, properties) => {
+      if (!clipId) return;
+      setClips((prev) =>
+        prev.map((c) => (c.id === clipId ? { ...c, ...properties } : c)),
+      );
+      try {
+        await apiFetch(`/clips/${clipId}`, {
+          method: "PATCH",
+          body: JSON.stringify(properties),
+        });
+        await loadTimeline();
+      } catch (err) {
+        alert(err.message || "Gagal memperbarui properti clip");
+        await loadTimeline();
+      }
+    },
+    [loadTimeline],
+  );
+
+  const moveClipToTrack = useCallback(
+    async (clipId, targetTrackId, timelineStart) => {
+      if (!clipId || !targetTrackId) return;
+      try {
+        await apiFetch(`/clips/${clipId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            trackId: targetTrackId,
+            ...(timelineStart !== undefined ? { timelineStart } : {}),
+          }),
+        });
+        await loadTimeline();
+      } catch (err) {
+        alert(err.message || "Gagal memindahkan clip ke track lain");
+      }
     },
     [loadTimeline],
   );
@@ -340,6 +415,37 @@ export default function useEditorState(projectId) {
     });
   }, []);
 
+  const addTrack = useCallback(
+    async (type = "VIDEO", name) => {
+      if (!projectId) return;
+      try {
+        await apiFetch(`/projects/${projectId}/tracks`, {
+          method: "POST",
+          body: JSON.stringify({ type, name }),
+        });
+        await loadTimeline();
+      } catch (err) {
+        alert(err.message || "Gagal menambahkan track");
+      }
+    },
+    [projectId, loadTimeline],
+  );
+
+  const deleteTrack = useCallback(
+    async (trackId) => {
+      if (!projectId || !trackId) return;
+      try {
+        await apiFetch(`/projects/${projectId}/tracks/${trackId}`, {
+          method: "DELETE",
+        });
+        await loadTimeline();
+      } catch (err) {
+        alert(err.message || "Gagal menghapus track");
+      }
+    },
+    [projectId, loadTimeline],
+  );
+
   return {
     mediaLibrary,
     mediaLoading,
@@ -347,6 +453,7 @@ export default function useEditorState(projectId) {
     isUploading,
     uploadMedia,
     deleteMedia,
+    tracks,
     clips: clipsWithLayout,
     timelineLoading,
     timelineError,
@@ -355,7 +462,12 @@ export default function useEditorState(projectId) {
     selectClip,
     deselectClip,
     updateClipTrim,
+    updateClipProperties,
+    moveClipToTrack,
     addClipToTimeline,
+    addTextClip,
+    addTrack,
+    deleteTrack,
     reorderClip,
     splitSelectedClip,
     splitClipAt,

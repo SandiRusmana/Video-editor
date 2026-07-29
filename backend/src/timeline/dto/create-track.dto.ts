@@ -1,9 +1,13 @@
-import { IsEnum, IsNumber, IsOptional } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TrackType } from '@prisma/client';
 
 export class CreateTrackDto {
   @IsEnum(TrackType)
   type: TrackType;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
 
   @IsOptional()
   @IsNumber()
