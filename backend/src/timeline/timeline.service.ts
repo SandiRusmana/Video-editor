@@ -33,18 +33,36 @@ export class TimelineService {
     if (existing) return existing;
 
     const trackCount = await this.prisma.track.count({ where: { projectId } });
+    const nameMap = {
+      VIDEO: `Video Track ${trackCount + 1}`,
+      AUDIO: `Audio Track`,
+      TEXT: `Text Track`,
+    };
     return this.prisma.track.create({
-      data: { projectId, type: trackType, order: trackCount },
+      data: {
+        projectId,
+        type: trackType,
+        name: nameMap[trackType] || `${trackType} Track`,
+        order: trackCount,
+      },
     });
   }
 
   async createTrack(userId: string, projectId: string, dto: CreateTrackDto) {
     await this.assertProjectOwnership(userId, projectId);
     const trackCount = await this.prisma.track.count({ where: { projectId } });
+    const defaultName =
+      dto.type === TrackType.VIDEO
+        ? `Video Track ${trackCount + 1}`
+        : dto.type === TrackType.AUDIO
+        ? `Audio Track`
+        : `Text Track`;
+
     return this.prisma.track.create({
       data: {
         projectId,
         type: dto.type,
+        name: dto.name ?? defaultName,
         order: dto.order ?? trackCount,
       },
       include: {
@@ -65,6 +83,18 @@ export class TimelineService {
 
   async getTimeline(userId: string, projectId: string) {
     await this.assertProjectOwnership(userId, projectId);
+
+    const existingCount = await this.prisma.track.count({ where: { projectId } });
+    if (existingCount === 0) {
+      await this.prisma.track.createMany({
+        data: [
+          { projectId, type: TrackType.VIDEO, name: 'Video Track 1', order: 0 },
+          { projectId, type: TrackType.VIDEO, name: 'Video Track 2', order: 1 },
+          { projectId, type: TrackType.TEXT, name: 'Text Track', order: 2 },
+          { projectId, type: TrackType.AUDIO, name: 'Audio Track', order: 3 },
+        ],
+      });
+    }
 
     return this.prisma.track.findMany({
       where: { projectId },

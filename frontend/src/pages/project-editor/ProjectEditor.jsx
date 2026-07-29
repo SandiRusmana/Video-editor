@@ -16,13 +16,20 @@ export default function ProjectEditor({
     mediaLibrary,
     uploadMedia,
     deleteMedia,
+    tracks,
     clips,
+    timelineLoading,
     totalDuration,
     selectedClip,
     selectClip,
     deselectClip,
     updateClipTrim,
+    updateClipProperties,
+    moveClipToTrack,
     addClipToTimeline,
+    addTextClip,
+    addTrack,
+    deleteTrack,
     reorderClip,
     deleteClip,
     splitClipAt,
@@ -65,9 +72,6 @@ export default function ProjectEditor({
     setIsEditingName(true);
   };
 
-  // Simpan perubahan nama project ke backend (PATCH /projects/:id) —
-  // sebelumnya cuma ubah state lokal, jadi tidak pernah tersimpan ke
-  // database dan hilang lagi begitu balik ke Dashboard.
   const commitName = async () => {
     const trimmed = nameDraft.trim();
     setIsEditingName(false);
@@ -75,7 +79,7 @@ export default function ProjectEditor({
     if (!trimmed || trimmed === projectName) return;
 
     const previousName = projectName;
-    setProjectName(trimmed); // update tampilan langsung (optimistic)
+    setProjectName(trimmed);
 
     try {
       const token = localStorage.getItem("token");
@@ -91,13 +95,13 @@ export default function ProjectEditor({
       if (!res.ok) throw new Error(data?.message || `Gagal menyimpan nama (${res.status})`);
     } catch (err) {
       alert(err.message || "Gagal mengubah nama project");
-      setProjectName(previousName); // batalkan tampilan kalau gagal disimpan
+      setProjectName(previousName);
     }
   };
 
-  const handleDropMedia = (mediaId) => {
+  const handleDropMedia = (mediaId, targetTrackId) => {
     const media = mediaLibrary.find((m) => m.id === mediaId);
-    if (media) addClipToTimeline(media);
+    if (media) addClipToTimeline(media, targetTrackId);
   };
 
   const handleSeekStart = () => {
@@ -183,11 +187,17 @@ export default function ProjectEditor({
           isSeeking={isSeeking}
           seekGeneration={seekGeneration}
         />
-        <PropertiesPanel clip={selectedClip} onUpdateTrim={updateClipTrim} />
+        <PropertiesPanel
+          clip={selectedClip}
+          onUpdateTrim={updateClipTrim}
+          onUpdateProperties={updateClipProperties}
+        />
       </div>
 
       <TimelineEditor
+        tracks={tracks}
         clips={clips}
+        timelineLoading={timelineLoading}
         totalDuration={totalDuration}
         selectedClipId={selectedClip?.id}
         onSelectClip={selectClip}
@@ -199,6 +209,11 @@ export default function ProjectEditor({
         onReorderClip={reorderClip}
         onDeleteClip={deleteClip}
         onSplitClip={splitClipAt}
+        onAddTextClip={addTextClip}
+        onAddTrack={addTrack}
+        onDeleteTrack={deleteTrack}
+        onMoveClipToTrack={moveClipToTrack}
+        onUpdateClipProperties={updateClipProperties}
         onSeekStart={handleSeekStart}
         onSeekEnd={handleSeekEnd}
       />
