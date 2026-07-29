@@ -1,6 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MediaType, TrackType } from '@prisma/client';
+import { AddClipDto } from './dto/add-clip.dto';
+import { CreateTrackDto } from './dto/create-track.dto';
+import { UpdateClipDto } from './dto/update-clip.dto';
 
 const DEFAULT_IMAGE_DURATION = 5; // detik, dipakai kalau media tidak punya durasi (gambar)
 
@@ -35,6 +38,31 @@ export class TimelineService {
     });
   }
 
+  async createTrack(userId: string, projectId: string, dto: CreateTrackDto) {
+    await this.assertProjectOwnership(userId, projectId);
+    const trackCount = await this.prisma.track.count({ where: { projectId } });
+    return this.prisma.track.create({
+      data: {
+        projectId,
+        type: dto.type,
+        order: dto.order ?? trackCount,
+      },
+      include: {
+        clips: true,
+      },
+    });
+  }
+
+  async deleteTrack(userId: string, projectId: string, trackId: string) {
+    await this.assertProjectOwnership(userId, projectId);
+    const track = await this.prisma.track.findUnique({ where: { id: trackId } });
+    if (!track) throw new NotFoundException('Track tidak ditemukan');
+    if (track.projectId !== projectId) {
+      throw new ForbiddenException('Track bukan bagian dari project ini');
+    }
+    return this.prisma.track.delete({ where: { id: trackId } });
+  }
+
   async getTimeline(userId: string, projectId: string) {
     await this.assertProjectOwnership(userId, projectId);
 
@@ -54,28 +82,45 @@ export class TimelineService {
     });
   }
 
-  // Story 7 & 8: tambahkan media ke timeline sebagai clip baru.
-  // - Kalau `customStart` dikirim (hasil drag & drop ke posisi tertentu),
-  //   posisi itu yang dipakai.
-  // - Kalau tidak dikirim, clip otomatis ditempel di ujung track yang
-  //   sesuai (perilaku default / penambahan biasa dari Media Library).
-  async addClip(userId: string, projectId: string, mediaId: string, customStart?: number) {
+  // Story 7, 8, & Text Track: tambahkan media / teks ke timeline sebagai clip baru.
+  // Supports media clips and text clips, with explicit trackId or auto track creation.
+  async addClip(userId: string, projectId: string, dto: AddClipDto) {
     await this.assertProjectOwnership(userId, projectId);
 
-    const media = await this.prisma.media.findUnique({ where: { id: mediaId } });
-    if (!media) throw new NotFoundException('Media tidak ditemukan');
-    if (media.projectId !== projectId) {
-      throw new ForbiddenException('Media ini bukan bagian dari project yang dimaksud');
+    let track: any;
+    let clipDuration = dto.duration ?? DEFAULT_IMAGE_DURATION;
+    let media: any = null;
+
+    if (dto.mediaId) {
+      media = await this.prisma.media.findUnique({ where: { id: dto.mediaId } });
+      if (!media) throw new NotFoundException('Media tidak ditemukan');
+      if (media.projectId !== projectId) {
+        throw new ForbiddenException('Media ini bukan bagian dari project yang dimaksud');
+      }
+      clipDuration = media.duration ?? DEFAULT_IMAGE_DURATION;
+    } else if (!dto.textContent && !dto.trackType && !dto.trackId) {
+      throw new BadRequestException('mediaId atau textContent harus diisi');
     }
 
-    const trackType = this.mapMediaTypeToTrackType(media.type);
-    const track = await this.getOrCreateTrack(projectId, trackType);
-
-    const clipDuration = media.duration ?? DEFAULT_IMAGE_DURATION;
+    if (dto.trackId) {
+      track = await this.prisma.track.findUnique({ where: { id: dto.trackId } });
+      if (!track) throw new NotFoundException('Track tidak ditemukan');
+      if (track.projectId !== projectId) {
+        throw new ForbiddenException('Track bukan bagian dari project ini');
+      }
+    } else if (dto.trackType) {
+      track = await this.getOrCreateTrack(projectId, dto.trackType);
+    } else if (media) {
+      const trackType = this.mapMediaTypeToTrackType(media.type);
+      track = await this.getOrCreateTrack(projectId, trackType);
+    } else {
+      // Text Clip
+      track = await this.getOrCreateTrack(projectId, TrackType.TEXT);
+    }
 
     let timelineStart: number;
-    if (customStart !== undefined) {
-      timelineStart = customStart;
+    if (dto.timelineStart !== undefined) {
+      timelineStart = dto.timelineStart;
     } else {
       const lastClip = await this.prisma.clip.findFirst({
         where: { trackId: track.id },
@@ -87,12 +132,49 @@ export class TimelineService {
     return this.prisma.clip.create({
       data: {
         trackId: track.id,
-        mediaId: media.id,
+        mediaId: media ? media.id : null,
         timelineStart,
         inPoint: 0,
         outPoint: clipDuration,
+        textContent: dto.textContent ?? null,
+        fontSize: dto.fontSize ?? (dto.textContent ? 36 : null),
+        fontColor: dto.fontColor ?? (dto.textContent ? '#ffffff' : null),
       },
       include: {
+        track: true,
+        media: {
+          select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
+        },
+      },
+    });
+  }
+
+  // Update clip properties or move clip to another track
+  async updateClip(userId: string, clipId: string, dto: UpdateClipDto) {
+    const clip = await this.prisma.clip.findUnique({
+      where: { id: clipId },
+      include: { track: { include: { project: true } } },
+    });
+    if (!clip) throw new NotFoundException('Clip tidak ditemukan');
+    if (clip.track.project.ownerId !== userId) {
+      throw new ForbiddenException('Bukan pemilik project ini');
+    }
+
+    if (dto.trackId && dto.trackId !== clip.trackId) {
+      const targetTrack = await this.prisma.track.findUnique({
+        where: { id: dto.trackId },
+      });
+      if (!targetTrack) throw new NotFoundException('Target track tidak ditemukan');
+      if (targetTrack.projectId !== clip.track.projectId) {
+        throw new ForbiddenException('Target track berada di project yang berbeda');
+      }
+    }
+
+    return this.prisma.clip.update({
+      where: { id: clipId },
+      data: dto,
+      include: {
+        track: true,
         media: {
           select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
         },
@@ -101,9 +183,6 @@ export class TimelineService {
   }
 
   // Story 9: potong satu clip jadi dua pada posisi playhead (atTime).
-  // Prinsipnya: clip lama diperpendek (outPoint dipotong sampai titik split),
-  // lalu dibuat clip baru sebagai lanjutannya, mulai dari titik split itu.
-  // File media asli TIDAK disentuh — cuma metadata timeline yang berubah.
   async splitClip(userId: string, clipId: string, atTime: number) {
     const clip = await this.prisma.clip.findUnique({
       where: { id: clipId },
@@ -116,17 +195,13 @@ export class TimelineService {
 
     const clipEnd = clip.timelineStart + (clip.outPoint - clip.inPoint);
 
-    // Titik split harus berada di DALAM rentang clip, bukan pas di ujung
-    // (kalau pas di ujung, hasilnya salah satu clip berdurasi 0 — tidak masuk akal)
     if (atTime <= clip.timelineStart + 0.05 || atTime >= clipEnd - 0.05) {
       throw new BadRequestException('Posisi playhead harus berada di dalam rentang clip untuk melakukan split');
     }
 
-    // Posisi split, diterjemahkan ke "detik di dalam file sumber media"
     const localSplitPoint = clip.inPoint + (atTime - clip.timelineStart);
-    const originalOutPoint = clip.outPoint; // simpan dulu sebelum di-overwrite
+    const originalOutPoint = clip.outPoint;
 
-    // Clip pertama: dipendekkan, berakhir tepat di titik split
     const firstClip = await this.prisma.clip.update({
       where: { id: clipId },
       data: { outPoint: localSplitPoint },
@@ -135,9 +210,6 @@ export class TimelineService {
       },
     });
 
-    // Clip kedua: kelanjutan dari titik split sampai akhir clip semula,
-    // media sumber & properti visual/audio disalin supaya konsisten dengan
-    // clip asalnya (Acceptance 5).
     const secondClip = await this.prisma.clip.create({
       data: {
         trackId: clip.trackId,
@@ -152,6 +224,9 @@ export class TimelineService {
         opacity: clip.opacity,
         volume: clip.volume,
         muted: clip.muted,
+        textContent: clip.textContent,
+        fontSize: clip.fontSize,
+        fontColor: clip.fontColor,
         filter: clip.filter,
       },
       include: {
@@ -163,7 +238,6 @@ export class TimelineService {
   }
 
   // Story 12: Trim clip dengan mengubah titik awal (inPoint) atau titik akhir (outPoint).
-  // Mengubah inPoint/outPoint tidak mengubah file media asli.
   async trimClip(userId: string, clipId: string, dto: { inPoint?: number, outPoint?: number, timelineStart?: number }) {
     const clip = await this.prisma.clip.findUnique({
       where: { id: clipId },
@@ -202,8 +276,6 @@ export class TimelineService {
     });
   }
 
-  // Hapus satu clip dari timeline. File media aslinya tidak ikut terhapus
-  // (cuma clip-nya, medianya tetap ada di Media Library).
   async deleteClip(userId: string, projectId: string, clipId: string) {
     await this.assertProjectOwnership(userId, projectId);
 
@@ -219,10 +291,6 @@ export class TimelineService {
     return this.prisma.clip.delete({ where: { id: clipId } });
   }
 
-  // Susun ulang urutan beberapa clip (Move Clip). `clipIds` dikirim sesuai
-  // urutan BARU yang diinginkan user — backend menghitung ulang posisi
-  // (timelineStart) masing-masing supaya berurutan nempel sesuai urutan itu.
-  // Catatan: semua clip yang di-reorder harus berada di track yang sama.
   async reorderClips(userId: string, projectId: string, clipIds: string[]) {
     await this.assertProjectOwnership(userId, projectId);
 
@@ -246,8 +314,6 @@ export class TimelineService {
       throw new BadRequestException('Semua clip yang di-reorder harus berada di track yang sama');
     }
 
-    // Hitung ulang posisi tiap clip secara berurutan sesuai urutan
-    // clipIds yang dikirim, saling nempel tanpa celah (nose-to-tail).
     let cursor = 0;
     const updated: any[] = [];
     for (const id of clipIds) {
