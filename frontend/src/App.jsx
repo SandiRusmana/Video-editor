@@ -6,7 +6,9 @@ import Dashboard from "./fitur/fitur-dashboard/dashboard.jsx";
 import ProjectEditor from "./pages/project-editor/ProjectEditor.jsx";
 
 function App() {
-  const [halaman, setHalaman] = useState("landing");
+  const [halaman, setHalaman] = useState(() =>
+    localStorage.getItem("token") ? "dashboard" : "landing",
+  );
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [selectedProjectName, setSelectedProjectName] = useState("");
 
