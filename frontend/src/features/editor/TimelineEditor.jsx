@@ -17,6 +17,25 @@ function buildRuler(totalDuration) {
   return marks;
 }
 
+// ---- Auto-lane: bagi clip video yang bentrok waktu ke baris "Video 1", "Video 2", dst ----
+// Ini murni logic tampilan di frontend, tidak butuh field tambahan dari backend.
+function assignVideoLanes(videoClips) {
+  const sorted = [...videoClips].sort((a, b) => a.timelineStart - b.timelineStart);
+  const laneEnds = []; // waktu akhir clip terakhir di tiap lane
+  const laned = sorted.map((clip) => {
+    const clipEnd = clip.timelineStart + clip.duration;
+    let laneIndex = laneEnds.findIndex((end) => end <= clip.timelineStart + 0.001);
+    if (laneIndex === -1) {
+      laneIndex = laneEnds.length;
+      laneEnds.push(clipEnd);
+    } else {
+      laneEnds[laneIndex] = clipEnd;
+    }
+    return { ...clip, laneIndex };
+  });
+  return { laned, laneCount: Math.max(laneEnds.length, 1) };
+}
+
 function TrimHandle({ side, onDragStart }) {
   return (
     <div
@@ -140,6 +159,136 @@ function Clip({ clip, isSelected, onSelect, onTrim, onDelete }) {
   );
 }
 
+// ---- Text clip: local-only, belum tersambung ke backend ----
+// Backend belum punya endpoint utk clip text, jadi state-nya disimpan
+// di komponen ini saja. Kalau backend sudah siap, ganti setTextClips
+// jadi pemanggilan API (create/update/delete text clip).
+function TextClip({ clip, isSelected, onSelect, onChangeText, onMove, onResize, onDelete }) {
+  const dragRef = useRef(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(clip.text);
+
+  const handleMoveStart = useCallback(
+    (e) => {
+      e.stopPropagation();
+      onSelect(clip.id);
+      const startX = e.clientX;
+      const startTimelineStart = clip.timelineStart;
+      dragRef.current = { startX, startTimelineStart };
+
+      const handleMouseMove = (moveEvent) => {
+        const deltaPx = moveEvent.clientX - dragRef.current.startX;
+        const deltaSec = deltaPx / PIXELS_PER_SECOND;
+        const newStart = Math.max(0, dragRef.current.startTimelineStart + deltaSec);
+        onMove(clip.id, newStart);
+      };
+
+      const handleMouseUp = () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [clip, onMove, onSelect]
+  );
+
+  const handleResizeStart = useCallback(
+    (e, side) => {
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startTimelineStart = clip.timelineStart;
+      const startDuration = clip.duration;
+      dragRef.current = { side, startX, startTimelineStart, startDuration };
+
+      const handleMouseMove = (moveEvent) => {
+        const deltaPx = moveEvent.clientX - dragRef.current.startX;
+        const deltaSec = deltaPx / PIXELS_PER_SECOND;
+
+        if (dragRef.current.side === "left") {
+          const newStart = Math.max(0, dragRef.current.startTimelineStart + deltaSec);
+          const newDuration = Math.max(0.5, dragRef.current.startDuration - deltaSec);
+          onResize(clip.id, { timelineStart: newStart, duration: newDuration });
+        } else {
+          const newDuration = Math.max(0.5, dragRef.current.startDuration + deltaSec);
+          onResize(clip.id, { duration: newDuration });
+        }
+      };
+
+      const handleMouseUp = () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [clip, onResize]
+  );
+
+  const commitEdit = () => {
+    const trimmed = draft.trim();
+    onChangeText(clip.id, trimmed || clip.text);
+    setIsEditing(false);
+  };
+
+  return (
+    <div
+      className={`clip clip--text ${isSelected ? "clip--selected" : ""}`}
+      style={{ left: clip.left, width: clip.width }}
+      onMouseDown={handleMoveStart}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect(clip.id);
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setDraft(clip.text);
+        setIsEditing(true);
+      }}
+    >
+      <div
+        className="clip__handle clip__handle--left"
+        onMouseDown={(e) => handleResizeStart(e, "left")}
+      />
+      {isEditing ? (
+        <input
+          className="clip__text-input"
+          value={draft}
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitEdit();
+            if (e.key === "Escape") setIsEditing(false);
+          }}
+        />
+      ) : (
+        <span className="clip__label">{clip.text}</span>
+      )}
+      <button
+        className="clip__delete"
+        title="Hapus teks"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(clip.id);
+        }}
+      >
+        ✕
+      </button>
+      <div
+        className="clip__handle clip__handle--right"
+        onMouseDown={(e) => handleResizeStart(e, "right")}
+      />
+    </div>
+  );
+}
+
+let textIdCounter = 0;
+
 export default function TimelineEditor({
   clips,
   totalDuration,
@@ -162,7 +311,61 @@ export default function TimelineEditor({
   const videoClips = clips.filter((c) => c.trackType === "VIDEO");
   const audioClips = clips.filter((c) => c.trackType === "AUDIO");
 
-  // Tombol Split aktif hanya jika: ada clip dipilih DAN playhead
+  const { laned: videoClipsLaned, laneCount: videoLaneCount } = assignVideoLanes(videoClips);
+
+  // ---- State text clip lokal (belum disambung ke backend) ----
+  const [textClips, setTextClips] = useState([]);
+  const [selectedTextId, setSelectedTextId] = useState(null);
+
+  const addTextClip = () => {
+    textIdCounter += 1;
+    const newClip = {
+      id: `local-text-${Date.now()}-${textIdCounter}`,
+      text: "Teks Baru",
+      timelineStart: currentTime,
+      duration: 3,
+    };
+    setTextClips((prev) => [...prev, newClip]);
+    setSelectedTextId(newClip.id);
+  };
+
+  const updateTextClip = (id, patch) => {
+    setTextClips((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  };
+
+  const moveTextClip = (id, timelineStart) => updateTextClip(id, { timelineStart });
+
+  const changeTextContent = (id, text) => updateTextClip(id, { text });
+
+  const deleteTextClip = (id) => {
+    setTextClips((prev) => prev.filter((t) => t.id !== id));
+    if (selectedTextId === id) setSelectedTextId(null);
+  };
+
+  const textClipsWithLayout = textClips.map((t) => ({
+    ...t,
+    left: t.timelineStart * PIXELS_PER_SECOND,
+    width: t.duration * PIXELS_PER_SECOND,
+  }));
+
+  // ---- Konfirmasi delete (video/audio clip & text clip) ----
+  const [pendingDelete, setPendingDelete] = useState(null); // { id, kind: 'clip' | 'text' }
+
+  const requestDeleteClip = (id) => setPendingDelete({ id, kind: "clip" });
+  const requestDeleteText = (id) => setPendingDelete({ id, kind: "text" });
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    if (pendingDelete.kind === "clip") {
+      onDeleteClip(pendingDelete.id);
+    } else {
+      deleteTextClip(pendingDelete.id);
+    }
+    setPendingDelete(null);
+  };
+
+  const cancelDelete = () => setPendingDelete(null);
+
   // berada DALAM rentang clip itu (dengan margin 0.05s di tiap ujung
   // untuk mencegah split di posisi pas awal/akhir clip).
   const selectedClip = clips.find((c) => c.id === selectedClipId) || null;
@@ -176,6 +379,7 @@ export default function TimelineEditor({
 
   const handleLaneClick = (e) => {
     onDeselect();
+    setSelectedTextId(null);
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const newTime = Math.max(0, Math.min(totalDuration, clickX / PIXELS_PER_SECOND));
@@ -224,6 +428,9 @@ export default function TimelineEditor({
       <div className="timeline-editor__header">
         <h3>TIMELINE EDITOR</h3>
         <div className="timeline-editor__header-actions">
+          <button className="timeline-editor__btn-split" onClick={addTextClip} title="Tambah teks ke timeline">
+            + Text
+          </button>
           <button
             className={`timeline-editor__btn-split${canSplit ? " timeline-editor__btn-split--active" : ""}`}
             onClick={() => canSplit && onSplitClip(selectedClipId, currentTime)}
@@ -251,7 +458,7 @@ export default function TimelineEditor({
             ))}
           </div>
 
-          {clips.length === 0 ? (
+          {clips.length === 0 && textClips.length === 0 ? (
             <div
               className={`timeline-editor__empty ${dragOverTrack === "EMPTY" ? "timeline-editor__empty--drag" : ""}`}
               onDragOver={(e) => handleDragOver(e, "EMPTY")}
@@ -265,24 +472,53 @@ export default function TimelineEditor({
             </div>
           ) : (
             <div className="timeline-editor__tracks-container">
-              {/* TRACK VIDEO */}
+              {/* TRACK VIDEO — otomatis kebagi Video 1, Video 2, dst kalau ada yang bentrok waktu */}
+              {Array.from({ length: videoLaneCount }).map((_, laneIndex) => (
+                <div className="timeline-editor__track" key={`video-lane-${laneIndex}`}>
+                  <span className="timeline-editor__track-label">Video {laneIndex + 1}</span>
+                  <div
+                    className={`timeline-editor__lane ${dragOverTrack === "VIDEO" ? "timeline-editor__lane--drag-over" : ""}`}
+                    onClick={handleLaneClick}
+                    onDragOver={(e) => handleDragOver(e, "VIDEO")}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, "VIDEO")}
+                  >
+                    {videoClipsLaned
+                      .filter((c) => c.laneIndex === laneIndex)
+                      .map((clip) => (
+                        <Clip
+                          key={clip.id}
+                          clip={clip}
+                          isSelected={clip.id === selectedClipId}
+                          onSelect={onSelectClip}
+                          onTrim={onTrimClip}
+                          onDelete={requestDeleteClip}
+                        />
+                      ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* TRACK TEXT — local-only, belum kesambung backend */}
               <div className="timeline-editor__track">
-                <span className="timeline-editor__track-label">Video Track</span>
+                <span className="timeline-editor__track-label">Text</span>
                 <div
-                  className={`timeline-editor__lane ${dragOverTrack === "VIDEO" ? "timeline-editor__lane--drag-over" : ""}`}
-                  onClick={handleLaneClick}
-                  onDragOver={(e) => handleDragOver(e, "VIDEO")}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, "VIDEO")}
+                  className="timeline-editor__lane"
+                  onClick={() => {
+                    onDeselect();
+                    setSelectedTextId(null);
+                  }}
                 >
-                  {videoClips.map((clip) => (
-                    <Clip
+                  {textClipsWithLayout.map((clip) => (
+                    <TextClip
                       key={clip.id}
                       clip={clip}
-                      isSelected={clip.id === selectedClipId}
-                      onSelect={onSelectClip}
-                      onTrim={onTrimClip}
-                      onDelete={onDeleteClip}
+                      isSelected={clip.id === selectedTextId}
+                      onSelect={setSelectedTextId}
+                      onChangeText={changeTextContent}
+                      onMove={moveTextClip}
+                      onResize={(id, patch) => updateTextClip(id, patch)}
+                      onDelete={requestDeleteText}
                     />
                   ))}
                 </div>
@@ -290,7 +526,7 @@ export default function TimelineEditor({
 
               {/* TRACK AUDIO */}
               <div className="timeline-editor__track">
-                <span className="timeline-editor__track-label">Audio Track</span>
+                <span className="timeline-editor__track-label">Audio</span>
                 <div
                   className={`timeline-editor__lane ${dragOverTrack === "AUDIO" ? "timeline-editor__lane--drag-over" : ""}`}
                   onClick={handleLaneClick}
@@ -305,7 +541,7 @@ export default function TimelineEditor({
                       isSelected={clip.id === selectedClipId}
                       onSelect={onSelectClip}
                       onTrim={onTrimClip}
-                      onDelete={onDeleteClip}
+                      onDelete={requestDeleteClip}
                     />
                   ))}
                 </div>
@@ -313,7 +549,7 @@ export default function TimelineEditor({
             </div>
           )}
 
-          {clips.length > 0 && (
+          {(clips.length > 0 || textClips.length > 0) && (
             <Playhead
               currentTime={currentTime}
               totalDuration={totalDuration}
@@ -325,6 +561,22 @@ export default function TimelineEditor({
 
         </div>
       </div>
+
+      {pendingDelete && (
+        <div className="delete-confirm__overlay">
+          <div className="delete-confirm__box">
+            <p>Yakin mau hapus clip ini?</p>
+            <div className="delete-confirm__actions">
+              <button className="btn btn--danger btn--sm" onClick={confirmDelete}>
+                Ya, Hapus
+              </button>
+              <button className="btn btn--ghost btn--sm" onClick={cancelDelete}>
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

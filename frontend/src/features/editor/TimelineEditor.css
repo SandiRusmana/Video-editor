@@ -323,3 +323,32 @@
 .timeline-editor__btn-split--active:hover {
   background: rgba(34, 211, 238, 0.2);
 }
+.delete-confirm__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.delete-confirm__box {
+  background: #131635;
+  border: 1px solid #2a2e50;
+  padding: 24px;
+  border-radius: 10px;
+  text-align: center;
+  min-width: 260px;
+  color: #e4e5f5;
+}
+.delete-confirm__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 16px;
+}
+.btn--danger {
+  background: #d9433f;
+  border: 1px solid #d9433f;
+  color: #fff;
+}
