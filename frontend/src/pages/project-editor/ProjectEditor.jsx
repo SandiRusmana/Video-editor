@@ -37,6 +37,7 @@ export default function ProjectEditor({
     setCurrentTime,
     isPlaying,
     setIsPlaying,
+    toastMessage,
   } = useEditorState(projectId);
 
   const [projectName, setProjectName] = useState(initialProjectName || "Konten YouTube");
@@ -214,6 +215,7 @@ export default function ProjectEditor({
         onDeleteTrack={deleteTrack}
         onMoveClipToTrack={moveClipToTrack}
         onUpdateClipProperties={updateClipProperties}
+        toastMessage={toastMessage}
         onSeekStart={handleSeekStart}
         onSeekEnd={handleSeekEnd}
       />

@@ -449,3 +449,44 @@
 .btn--danger:hover {
   background: #dc2626;
 }
+
+/* Drop indicator line during drag */
+.timeline-editor__drop-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8, 0 0 4px #38bdf8;
+  z-index: 80;
+  pointer-events: none;
+  border-radius: 2px;
+}
+
+/* Toast feedback message */
+.timeline-editor__toast {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  background: rgba(16, 185, 129, 0.95);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+  z-index: 300;
+  animation: toastFadeIn 0.2s ease-out;
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

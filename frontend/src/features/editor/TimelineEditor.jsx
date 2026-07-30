@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { PIXELS_PER_SECOND } from "./useEditorState";
 import "./TimelineEditor.css";
 
@@ -200,12 +200,18 @@ export default function TimelineEditor({
   onDeleteTrack,
   onMoveClipToTrack,
   onUpdateClipProperties,
+  toastMessage = null,
 }) {
   const ruler = buildRuler(Math.max(totalDuration, 40));
   const [dragOverTrackId, setDragOverTrackId] = useState(null);
+  const [dragIndicator, setDragIndicator] = useState(null);
+  const [draggingClipId, setDraggingClipId] = useState(null);
+
   const [pendingDeleteClipId, setPendingDeleteClipId] = useState(null);
   const [pendingDeleteTrackId, setPendingDeleteTrackId] = useState(null);
   const [showAddTrackMenu, setShowAddTrackMenu] = useState(false);
+
+  const pendingDeleteClip = clips.find((c) => c.id === pendingDeleteClipId);
 
   const requestDeleteClip = (id) => setPendingDeleteClipId(id);
 
@@ -229,6 +235,26 @@ export default function TimelineEditor({
 
   const cancelDeleteTrack = () => setPendingDeleteTrackId(null);
 
+  // Handle Delete / Backspace key shortcut to trigger clip deletion modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedClipId) return;
+
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      if (activeTag === "input" || activeTag === "textarea" || document.activeElement?.isContentEditable) {
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        requestDeleteClip(selectedClipId);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedClipId]);
+
   const selectedClip = clips.find((c) => c.id === selectedClipId) || null;
   const canSplit =
     selectedClip !== null &&
@@ -251,13 +277,22 @@ export default function TimelineEditor({
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDragOverTrackId(trackId);
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dropX = Math.max(0, e.clientX - rect.left);
+    setDragIndicator({ trackId, left: dropX });
   };
 
-  const handleDragLeave = () => setDragOverTrackId(null);
+  const handleDragLeave = () => {
+    setDragOverTrackId(null);
+    setDragIndicator(null);
+  };
 
   const handleDrop = (e, targetTrack) => {
     e.preventDefault();
     setDragOverTrackId(null);
+    setDragIndicator(null);
+    setDraggingClipId(null);
 
     const rect = e.currentTarget.getBoundingClientRect();
     const dropX = Math.max(0, e.clientX - rect.left);
@@ -415,6 +450,13 @@ export default function TimelineEditor({
                         onDragLeave={handleDragLeave}
                         onDrop={(e) => handleDrop(e, track)}
                       >
+                        {dragIndicator && dragIndicator.trackId === track.id && (
+                          <div
+                            className="timeline-editor__drop-indicator"
+                            style={{ left: dragIndicator.left }}
+                          />
+                        )}
+
                         {trackClips.map((clip) => (
                           <Clip
                             key={clip.id}
@@ -450,7 +492,13 @@ export default function TimelineEditor({
       {pendingDeleteClipId && (
         <div className="delete-confirm__overlay">
           <div className="delete-confirm__box">
-            <p>Yakin mau hapus clip ini?</p>
+            <div style={{ fontSize: "28px", marginBottom: "6px" }}>🗑️</div>
+            <h4 style={{ margin: "0 0 8px", fontSize: "15px", color: "#ffffff", fontWeight: 700 }}>
+              Hapus Clip "{pendingDeleteClip?.name || "Clip"}"?
+            </h4>
+            <p style={{ margin: "0 0 18px", fontSize: "12.5px", color: "#8b8fb3", lineHeight: "1.4" }}>
+              Clip akan dihapus dari timeline. File media di Media Library tetap aman.
+            </p>
             <div className="delete-confirm__actions">
               <button className="btn btn--danger btn--sm" onClick={confirmDeleteClip}>
                 Ya, Hapus
@@ -476,6 +524,12 @@ export default function TimelineEditor({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toastMessage && (
+        <div className="timeline-editor__toast">
+          <span>✓ {toastMessage}</span>
         </div>
       )}
     </section>

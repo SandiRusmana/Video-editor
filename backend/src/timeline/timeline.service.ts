@@ -362,4 +362,30 @@ export class TimelineService {
 
     return updated;
   }
+
+  async updateClipsPositions(
+    userId: string,
+    projectId: string,
+    updates: { id: string; trackId: string; timelineStart: number }[],
+  ) {
+    await this.assertProjectOwnership(userId, projectId);
+
+    const updatedClips: any[] = [];
+    for (const update of updates) {
+      const clip = await this.prisma.clip.update({
+        where: { id: update.id },
+        data: {
+          trackId: update.trackId,
+          timelineStart: update.timelineStart,
+        },
+        include: {
+          media: {
+            select: { id: true, name: true, type: true, duration: true, thumbnail: true, path: true },
+          },
+        },
+      });
+      updatedClips.push(clip);
+    }
+    return updatedClips;
+  }
 }

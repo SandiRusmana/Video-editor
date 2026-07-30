@@ -43,6 +43,16 @@ export class TimelineController {
     return this.timelineService.reorderClips(req.user.userId, projectId, dto.clipIds);
   }
 
+  // PATCH /projects/:projectId/timeline/move-clips
+  @Patch('timeline/move-clips')
+  updateClipsPositions(
+    @Req() req,
+    @Param('projectId') projectId: string,
+    @Body() dto: { updates: { id: string; trackId: string; timelineStart: number }[] },
+  ) {
+    return this.timelineService.updateClipsPositions(req.user.userId, projectId, dto.updates);
+  }
+
   // DELETE /projects/:projectId/timeline/clips/:clipId
   @Delete('timeline/clips/:clipId')
   deleteClip(@Req() req, @Param('projectId') projectId: string, @Param('clipId') clipId: string) {
