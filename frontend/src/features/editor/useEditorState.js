@@ -318,23 +318,93 @@ export default function useEditorState(projectId) {
     [loadTimeline],
   );
 
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = useCallback((msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  }, []);
+
   const moveClipToTrack = useCallback(
-    async (clipId, targetTrackId, timelineStart) => {
-      if (!clipId || !targetTrackId) return;
-      try {
-        await apiFetch(`/clips/${clipId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            trackId: targetTrackId,
-            ...(timelineStart !== undefined ? { timelineStart } : {}),
-          }),
+    async (clipId, targetTrackId, dropTimelineStart) => {
+      if (!clipId || !targetTrackId || !projectId) return;
+
+      const movedClip = clips.find((c) => c.id === clipId);
+      if (!movedClip) return;
+
+      const sourceTrackId = movedClip.trackId;
+
+      // Filter existing clips on target track excluding moved clip
+      const targetTrackClips = clips
+        .filter((c) => c.trackId === targetTrackId && c.id !== clipId)
+        .sort((a, b) => a.timelineStart - b.timelineStart);
+
+      // Determine insertion index based on drop timeline position
+      let insertIndex = targetTrackClips.length;
+      for (let i = 0; i < targetTrackClips.length; i++) {
+        const c = targetTrackClips[i];
+        const midpoint = c.timelineStart + (c.duration || (c.trimEnd - c.trimStart)) / 2;
+        if (dropTimelineStart < midpoint) {
+          insertIndex = i;
+          break;
+        }
+      }
+
+      // Build updated list of target track clips
+      const newTargetClips = [...targetTrackClips];
+      newTargetClips.splice(insertIndex, 0, { ...movedClip, trackId: targetTrackId });
+
+      const updates = [];
+      let targetCursor = 0;
+      newTargetClips.forEach((c) => {
+        const clipDuration = c.trimEnd - c.trimStart;
+        updates.push({
+          id: c.id,
+          trackId: targetTrackId,
+          timelineStart: targetCursor,
         });
+        targetCursor += clipDuration;
+      });
+
+      // If moved across tracks, recalculate source track clips side-by-side
+      if (sourceTrackId !== targetTrackId) {
+        const sourceTrackClips = clips
+          .filter((c) => c.trackId === sourceTrackId && c.id !== clipId)
+          .sort((a, b) => a.timelineStart - b.timelineStart);
+
+        let sourceCursor = 0;
+        sourceTrackClips.forEach((c) => {
+          const clipDuration = c.trimEnd - c.trimStart;
+          updates.push({
+            id: c.id,
+            trackId: sourceTrackId,
+            timelineStart: sourceCursor,
+          });
+          sourceCursor += clipDuration;
+        });
+      }
+
+      // Optimistic update
+      setClips((prev) =>
+        prev.map((c) => {
+          const update = updates.find((u) => u.id === c.id);
+          return update ? { ...c, trackId: update.trackId, timelineStart: update.timelineStart } : c;
+        }),
+      );
+
+      try {
+        await apiFetch(`/projects/${projectId}/timeline/move-clips`, {
+          method: "PATCH",
+          body: JSON.stringify({ updates }),
+        });
+        showToast("Posisi clip berhasil diperbarui");
         await loadTimeline();
       } catch (err) {
-        alert(err.message || "Gagal memindahkan clip ke track lain");
+        showToast(err.message || "Gagal memindahkan clip");
+        await loadTimeline();
       }
     },
-    [loadTimeline],
+    [clips, projectId, loadTimeline, showToast],
   );
 
   const selectClip = useCallback((clipId) => setSelectedClipId(clipId), []);
@@ -386,17 +456,52 @@ export default function useEditorState(projectId) {
   const deleteClip = useCallback(
     async (clipId) => {
       if (!projectId || !clipId) return;
+
+      const clipToDelete = clips.find((c) => c.id === clipId);
+      const clipName = clipToDelete?.name || "Clip";
+      const trackId = clipToDelete?.trackId;
+
       try {
         await apiFetch(`/projects/${projectId}/timeline/clips/${clipId}`, {
           method: "DELETE",
         });
-        setClips((prev) => prev.filter((c) => c.id !== clipId));
+
         if (selectedClipId === clipId) deselectClip();
+
+        // Ripple adjustment: calculate side-by-side timestamps for remaining clips on track
+        if (trackId) {
+          const remainingClips = clips
+            .filter((c) => c.trackId === trackId && c.id !== clipId)
+            .sort((a, b) => a.timelineStart - b.timelineStart);
+
+          if (remainingClips.length > 0) {
+            let cursor = 0;
+            const updates = [];
+            remainingClips.forEach((c) => {
+              const duration = c.trimEnd - c.trimStart;
+              updates.push({
+                id: c.id,
+                trackId: c.trackId,
+                timelineStart: cursor,
+              });
+              cursor += duration;
+            });
+
+            await apiFetch(`/projects/${projectId}/timeline/move-clips`, {
+              method: "PATCH",
+              body: JSON.stringify({ updates }),
+            });
+          }
+        }
+
+        showToast(`Clip "${clipName}" berhasil dihapus dari timeline`);
+        await loadTimeline();
       } catch (err) {
-        alert(err.message || "Gagal menghapus clip");
+        showToast(err.message || "Gagal menghapus clip");
+        await loadTimeline();
       }
     },
-    [projectId, selectedClipId, deselectClip],
+    [projectId, clips, selectedClipId, deselectClip, showToast, loadTimeline],
   );
 
   const reorderClip = useCallback((clipId, targetIndex) => {
@@ -479,6 +584,8 @@ export default function useEditorState(projectId) {
     setCurrentTime,
     isPlaying,
     setIsPlaying,
+    toastMessage,
+    showToast,
     refreshTimeline: loadTimeline,
     refreshMedia: loadMedia,
   };
