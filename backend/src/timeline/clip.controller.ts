@@ -27,4 +27,20 @@ export class ClipController {
   trimClip(@Req() req, @Param('id') id: string, @Body() dto: TrimClipDto) {
     return this.timelineService.trimClip(req.user.userId, id, dto);
   }
+
+  // PATCH /clips/:id/rotate — update clip rotation metadata
+  @Patch(':id/rotate')
+  rotateClip(@Req() req, @Param('id') id: string, @Body() dto: { rotation: number }) {
+    return this.timelineService.updateClip(req.user.userId, id, { rotation: dto.rotation });
+  }
+
+  // PATCH /clips/:id/crop — update clip crop metadata
+  @Patch(':id/crop')
+  cropClip(
+    @Req() req,
+    @Param('id') id: string,
+    @Body() dto: { cropX?: number; cropY?: number; cropW?: number; cropH?: number },
+  ) {
+    return this.timelineService.updateClip(req.user.userId, id, dto);
+  }
 }
