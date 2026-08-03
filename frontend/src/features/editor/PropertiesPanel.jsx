@@ -20,6 +20,11 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
   const [fontColorInput, setFontColorInput] = useState("#ffffff");
   const [fontSizeInput, setFontSizeInput] = useState(36);
 
+  const [posXInput, setPosXInput] = useState(0);
+  const [posYInput, setPosYInput] = useState(0);
+
+  const [scaleInput, setScaleInput] = useState(1);
+
   useEffect(() => {
     if (clip) {
       setStartInput(toMMSS(clip.trimStart));
@@ -27,6 +32,9 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
       setTextInput(clip.textContent || clip.name || "");
       setFontColorInput(clip.fontColor || "#ffffff");
       setFontSizeInput(clip.fontSize || 36);
+      setPosXInput(clip.x ?? 0);
+      setPosYInput(clip.y ?? 0);
+      setScaleInput(clip.scale ?? 1);
     }
   }, [clip]);
 
@@ -65,6 +73,47 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
       onUpdateProperties(clip.id, { fontSize: val });
     }
   };
+
+  const commitPosX = () => {
+    const val = parseInt(posXInput, 10) || 0;
+    setPosXInput(val);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { x: val });
+    }
+  };
+
+  const commitPosY = () => {
+    const val = parseInt(posYInput, 10) || 0;
+    setPosYInput(val);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { y: val });
+    }
+  };
+
+  const resetPosition = () => {
+    setPosXInput(0);
+    setPosYInput(0);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { x: 0, y: 0 });
+    }
+  };
+
+  const commitScale = (val) => {
+    const num = parseFloat(val);
+    const clamped = isNaN(num) ? 1 : Math.max(0.1, Math.min(3, num));
+    setScaleInput(clamped);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { scale: clamped });
+    }
+  };
+
+  const resetScale = () => {
+    setScaleInput(1);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { scale: 1 });
+    }
+  };
+
 
   return (
     <aside className="properties-panel">
@@ -206,7 +255,169 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
         </div>
       </div>
 
-      {/* CARD 5: CROP MEDIA CONTROL */}
+      {/* CARD 5: POSISI (POSITION) CONTROL */}
+      {clip.type !== "audio" && (
+        <div className="properties-panel__card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="properties-panel__section-title">POSISI</span>
+            {(posXInput !== 0 || posYInput !== 0) && (
+              <button
+                type="button"
+                style={{ background: "none", border: "none", color: "#ef4444", fontSize: "11px", cursor: "pointer", fontWeight: "600" }}
+                onClick={resetPosition}
+              >
+                ↺ Reset
+              </button>
+            )}
+          </div>
+
+          <div className="properties-panel__row">
+            <label>X</label>
+            <input
+              type="number"
+              value={posXInput}
+              onChange={(e) => setPosXInput(e.target.value)}
+              onBlur={commitPosX}
+              onKeyDown={(e) => e.key === "Enter" && commitPosX()}
+              style={{ width: "75px" }}
+            />
+          </div>
+
+          <div className="properties-panel__row">
+            <label>Y</label>
+            <input
+              type="number"
+              value={posYInput}
+              onChange={(e) => setPosYInput(e.target.value)}
+              onBlur={commitPosY}
+              onKeyDown={(e) => e.key === "Enter" && commitPosY()}
+              style={{ width: "75px" }}
+            />
+          </div>
+
+          <div className="btn-preset-group">
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={() => {
+                setPosXInput(-100);
+                onUpdateProperties && onUpdateProperties(clip.id, { x: -100 });
+              }}
+            >
+              ← Kiri
+            </button>
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={resetPosition}
+            >
+              Tengah
+            </button>
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={() => {
+                setPosXInput(100);
+                onUpdateProperties && onUpdateProperties(clip.id, { x: 100 });
+              }}
+            >
+              Kanan →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CARD 6: SKALA / RESIZE CONTROL */}
+      {clip.type !== "audio" && (
+        <div className="properties-panel__card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="properties-panel__section-title">SKALA / RESIZE</span>
+            <span className="badge-value">{scaleInput}x</span>
+          </div>
+
+          <div className="properties-panel__row">
+            <label>Skala</label>
+            <input
+              type="range"
+              min="0.1"
+              max="3"
+              step="0.05"
+              value={scaleInput}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                setScaleInput(val);
+                onUpdateProperties && onUpdateProperties(clip.id, { scale: val });
+              }}
+            />
+          </div>
+
+          <div className="properties-panel__row">
+            <label>Nilai</label>
+            <input
+              type="number"
+              value={scaleInput}
+              min="0.1"
+              max="3"
+              step="0.05"
+              onChange={(e) => setScaleInput(e.target.value)}
+              onBlur={(e) => commitScale(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && commitScale(e.target.value)}
+              style={{ width: "65px" }}
+            />
+          </div>
+
+          <div className="btn-preset-group">
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={() => commitScale(0.5)}
+            >
+              0.5x
+            </button>
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={() => commitScale(0.75)}
+            >
+              0.75x
+            </button>
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={resetScale}
+            >
+              1x
+            </button>
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={() => commitScale(1.5)}
+            >
+              1.5x
+            </button>
+            <button
+              type="button"
+              className="btn-preset"
+              onClick={() => commitScale(2)}
+            >
+              2x
+            </button>
+          </div>
+
+          {scaleInput !== 1 && (
+            <button
+              type="button"
+              className="btn-rotate btn-rotate--reset"
+              style={{ width: "100%" }}
+              onClick={resetScale}
+            >
+              ↺ Reset ke 1x
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* CARD 7: CROP MEDIA CONTROL */}
       {(!isTextClip && clip.type !== "audio") && (
         <div className="properties-panel__card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
