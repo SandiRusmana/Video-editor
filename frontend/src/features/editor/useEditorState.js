@@ -150,6 +150,15 @@ export default function useEditorState(projectId) {
               trimStart: clip.inPoint,
               trimEnd: clip.outPoint,
               timelineStart: clip.timelineStart,
+              x: clip.x ?? 0,
+              y: clip.y ?? 0,
+              scale: clip.scale ?? 1,
+              rotation: clip.rotation ?? 0,
+              opacity: clip.opacity ?? 1,
+              cropX: clip.cropX ?? 0,
+              cropY: clip.cropY ?? 0,
+              cropW: clip.cropW ?? 0,
+              cropH: clip.cropH ?? 0,
               textContent: clip.textContent,
               fontSize: clip.fontSize ?? 36,
               fontColor: clip.fontColor ?? "#ffffff",
@@ -309,7 +318,6 @@ export default function useEditorState(projectId) {
           method: "PATCH",
           body: JSON.stringify(properties),
         });
-        await loadTimeline();
       } catch (err) {
         alert(err.message || "Gagal memperbarui properti clip");
         await loadTimeline();

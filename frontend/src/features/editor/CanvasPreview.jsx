@@ -223,7 +223,15 @@ export default function CanvasPreview({
                 <div
                   key={clip.id}
                   className="canvas-preview__layer"
-                  style={{ zIndex: index + 1 }}
+                  style={{
+                    zIndex: index + 1,
+                    transform: `rotate(${clip.rotation || 0}deg) scale(${clip.scale || 1}) translate(${clip.x || 0}px, ${clip.y || 0}px)`,
+                    clipPath: (clip.cropY || clip.cropX || clip.cropH || clip.cropW)
+                      ? `inset(${clip.cropY || 0}% ${clip.cropX || 0}% ${clip.cropH || 0}% ${clip.cropW || 0}%)`
+                      : "none",
+                    opacity: clip.opacity ?? 1,
+                    transition: "transform 0.15s ease-out, clip-path 0.15s ease-out",
+                  }}
                 >
                   {isVid ? (
                     <video

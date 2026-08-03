@@ -71,4 +71,20 @@ export class UpdateClipDto {
   @IsOptional()
   @IsString()
   transitionOut?: string;
+
+  @IsOptional()
+  @IsNumber()
+  cropX?: number;
+
+  @IsOptional()
+  @IsNumber()
+  cropY?: number;
+
+  @IsOptional()
+  @IsNumber()
+  cropW?: number;
+
+  @IsOptional()
+  @IsNumber()
+  cropH?: number;
 }
