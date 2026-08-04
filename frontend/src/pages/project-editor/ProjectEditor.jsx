@@ -187,6 +187,9 @@ export default function ProjectEditor({
           clips={clips}
           isSeeking={isSeeking}
           seekGeneration={seekGeneration}
+          selectedClipId={selectedClipId}
+          onSelectClip={setSelectedClipId}
+          onUpdateProperties={updateClipProperties}
         />
         <PropertiesPanel
           clip={selectedClip}

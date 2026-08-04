@@ -16,10 +16,49 @@ export default function CanvasPreview({
   clips = [],
   isSeeking,
   seekGeneration,
+  selectedClipId,
+  onSelectClip,
+  onUpdateProperties,
 }) {
   const primaryVideoRef = useRef(null);
   const audioRefs = useRef({});
   const [aspectRatio, setAspectRatio] = useState(null);
+
+  // Dragging Canvas Clip Position
+  const [draggingClipId, setDraggingClipId] = useState(null);
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, initialX: 0, initialY: 0 });
+
+  const handleMouseDown = (e, clip) => {
+    e.stopPropagation();
+    if (onSelectClip) onSelectClip(clip.id);
+    setDraggingClipId(clip.id);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      initialX: clip.x || 0,
+      initialY: clip.y || 0,
+    };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!draggingClipId) return;
+    const deltaX = e.clientX - dragStartRef.current.mouseX;
+    const deltaY = e.clientY - dragStartRef.current.mouseY;
+
+    // Apply canvas boundary constraints (-400px to +400px for X, -300px to +300px for Y)
+    const newX = Math.max(-400, Math.min(400, Math.round(dragStartRef.current.initialX + deltaX)));
+    const newY = Math.max(-300, Math.min(300, Math.round(dragStartRef.current.initialY + deltaY)));
+
+    if (onUpdateProperties) {
+      onUpdateProperties(draggingClipId, { x: newX, y: newY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (draggingClipId) {
+      setDraggingClipId(null);
+    }
+  };
 
   // Active Video / Image clips across all Video Tracks at currentTime
   const activeVideoClips = clips
@@ -211,18 +250,20 @@ export default function CanvasPreview({
         <h3>CANVAS / PREVIEW VIDEO</h3>
       </div>
 
-      <div className="canvas-preview__stage">
+      <div className="canvas-preview__stage" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
         <div className="canvas-preview__inner" style={{ "--ratio": aspectRatio || "16/9" }}>
           {activeVideoClips.length > 0 ? (
             activeVideoClips.map((clip, index) => {
               const isMaster = clip.id === masterVideoClip?.id;
               const isVid = clip.type === "video";
               const isImg = clip.type === "image";
+              const isSelected = clip.id === selectedClipId;
 
               return (
                 <div
                   key={clip.id}
-                  className="canvas-preview__layer"
+                  className={`canvas-preview__layer ${isSelected ? "canvas-preview__layer--selected" : ""}`}
+                  onMouseDown={(e) => handleMouseDown(e, clip)}
                   style={{
                     zIndex: index + 1,
                     transform: `rotate(${clip.rotation || 0}deg) scale(${clip.scale || 1}) translate(${clip.x || 0}px, ${clip.y || 0}px)`,
@@ -230,7 +271,10 @@ export default function CanvasPreview({
                       ? `inset(${clip.cropY || 0}% ${clip.cropX || 0}% ${clip.cropH || 0}% ${clip.cropW || 0}%)`
                       : "none",
                     opacity: clip.opacity ?? 1,
-                    transition: "transform 0.15s ease-out, clip-path 0.15s ease-out",
+                    cursor: draggingClipId === clip.id ? "grabbing" : "grab",
+                    outline: isSelected ? "2px dashed #6366f1" : "none",
+                    outlineOffset: "2px",
+                    transition: draggingClipId === clip.id ? "none" : "transform 0.15s ease-out, clip-path 0.15s ease-out",
                   }}
                 >
                   {isVid ? (
