@@ -52,6 +52,9 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
   const [rotationInput, setRotationInput] = useState(0);
   const [imagePositionInput, setImagePositionInput] = useState("Top Right");
 
+  const [volumeInput, setVolumeInput] = useState(1);
+  const [mutedInput, setMutedInput] = useState(false);
+
 
   useEffect(() => {
     if (clip) {
@@ -72,6 +75,9 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
       setOpacityInput(clip.opacity ?? 1);
       setRotationInput(clip.rotation ?? 0);
       setImagePositionInput(clip.textPosition || "Top Right"); // Reusing textPosition field for simplicity
+      
+      setVolumeInput(clip.volume ?? 1);
+      setMutedInput(clip.muted ?? false);
     }
   }, [clip]);
 
@@ -86,6 +92,7 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
 
   const isTextClip = clip.type === "text" || clip.trackType === "TEXT" || !!clip.textContent;
   const isImageClip = clip.type === "image";
+  const isAudioClip = clip.type === "audio" || clip.trackType === "AUDIO";
 
   const commitStart = () => onUpdateTrim && onUpdateTrim(clip.id, { trimStart: fromMMSS(startInput) });
   const commitEnd = () => onUpdateTrim && onUpdateTrim(clip.id, { trimEnd: fromMMSS(endInput) });
@@ -188,6 +195,23 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
     setPosYInput(0);
     if (onUpdateProperties) {
       onUpdateProperties(clip.id, { x: 0, y: 0 });
+    }
+  };
+
+  const commitVolume = (val) => {
+    let num = parseFloat(val);
+    if (isNaN(num)) num = 1;
+    num = Math.max(0, Math.min(1, num));
+    setVolumeInput(num);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { volume: num });
+    }
+  };
+
+  const commitMuted = (val) => {
+    setMutedInput(val);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { muted: val });
     }
   };
 
@@ -349,6 +373,77 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
           >
             🗑️ Remove Overlay
           </button>
+        </div>
+      </aside>
+    );
+  }
+
+  if (isAudioClip) {
+    return (
+      <aside className="properties-panel">
+        <h3 className="properties-panel__main-title"><span className="icon-audio">🎵</span> AUDIO CONTROLS</h3>
+        
+        <div className="properties-panel__card">
+          <div className="properties-panel__form-group">
+            <label>Clip</label>
+            <div className="media-name-badge">
+              <span className="media-icon">🎵</span>
+              <span className="media-text" title={clip.name}>{clip.name}</span>
+            </div>
+          </div>
+
+          <div className="properties-panel__form-group">
+            <label>Volume</label>
+            <div className="input-with-suffix" style={{ marginBottom: '8px' }}>
+              <input
+                type="number"
+                value={Math.round(volumeInput * 100)}
+                onChange={(e) => commitVolume(e.target.value / 100)}
+                min="0"
+                max="100"
+              />
+              <span>%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volumeInput}
+              onChange={(e) => commitVolume(e.target.value)}
+              className="properties-panel__slider"
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+
+          <div className="properties-panel__form-group">
+            <label>Mute</label>
+            <button
+              className={`btn-mute-toggle ${mutedInput ? 'muted' : ''}`}
+              onClick={() => commitMuted(!mutedInput)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', 
+                width: '100%', padding: '10px', borderRadius: '4px',
+                background: '#1a1f35', border: '1px solid #2a2f4c',
+                color: mutedInput ? '#ef4444' : '#10b981', cursor: 'pointer',
+                fontWeight: '600', transition: 'all 0.2s ease'
+              }}
+            >
+              <span style={{ fontSize: '16px' }}>{mutedInput ? '🔇' : '🔊'}</span>
+              {mutedInput ? 'Muted' : 'Unmuted'}
+            </button>
+          </div>
+
+          <div className="properties-panel__form-group">
+            <label>Trim</label>
+            <div className="trim-display-box" style={{
+                background: '#1a1f35', border: '1px solid #2a2f4c',
+                padding: '10px', borderRadius: '4px', color: '#e2e8f0',
+                fontSize: '14px', fontWeight: '500'
+            }}>
+              {Math.floor(clip.trimStart)}s-{Math.floor(clip.trimEnd)}s
+            </div>
+          </div>
         </div>
       </aside>
     );

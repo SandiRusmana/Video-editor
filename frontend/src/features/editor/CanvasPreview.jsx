@@ -304,7 +304,13 @@ export default function CanvasPreview({
         {activeAudioClips.map((ac) => (
           <audio
             key={ac.id}
-            ref={(el) => (audioRefs.current[ac.id] = el)}
+            ref={(el) => {
+              if (el) {
+                audioRefs.current[ac.id] = el;
+                el.volume = ac.volume ?? 1;
+                el.muted = ac.muted ?? false;
+              }
+            }}
             src={ac.url}
             preload="auto"
             style={{ display: "none" }}
@@ -368,6 +374,24 @@ export default function CanvasPreview({
           <span>{formatTime(totalDuration)}</span>
         </div>
       </div>
+
+      {/* Active Audio Indicator */}
+      {activeAudioClips.length > 0 && (
+        <div className="canvas-preview__audio-indicators" style={{
+          padding: "8px 16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          borderTop: "1px solid #1a1f35"
+        }}>
+          {activeAudioClips.map(ac => (
+            <div key={ac.id} style={{ display: "flex", alignItems: "center", gap: "8px", color: "#10b981", fontSize: "13px" }}>
+              <span>{ac.muted ? '🔇' : '🔊'}</span>
+              <span>Playing: {ac.name} (Vol: {ac.muted ? 0 : Math.round((ac.volume ?? 1) * 100)}%)</span>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
