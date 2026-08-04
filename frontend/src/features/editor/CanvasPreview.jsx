@@ -222,30 +222,44 @@ export default function CanvasPreview({
               return (
                 <div
                   key={clip.id}
-                  className="canvas-preview__layer"
+                  className={`canvas-preview__layer ${isImg ? 'canvas-preview__layer--image' : ''}`}
                   style={{
                     zIndex: index + 1,
-                    transform: `rotate(${clip.rotation || 0}deg) scale(${clip.scale || 1}) translate(${clip.x || 0}px, ${clip.y || 0}px)`,
-                    clipPath: (clip.cropY || clip.cropX || clip.cropH || clip.cropW)
-                      ? `inset(${clip.cropY || 0}% ${clip.cropX || 0}% ${clip.cropH || 0}% ${clip.cropW || 0}%)`
-                      : "none",
-                    opacity: clip.opacity ?? 1,
-                    transition: "transform 0.15s ease-out, clip-path 0.15s ease-out",
+                    pointerEvents: "none",
                   }}
                 >
-                  {isVid ? (
-                    <video
-                      ref={isMaster ? primaryVideoRef : null}
-                      src={clip.url}
-                      playsInline
-                      muted={activeAudioClipCount(clips) > 0}
-                      onTimeUpdate={isMaster ? handleTimeUpdate : undefined}
-                      onLoadedMetadata={isMaster ? handleLoadedMetadata : undefined}
-                      className="canvas-preview__video"
-                    />
-                  ) : isImg ? (
-                    <img src={clip.url} alt={clip.name} className="canvas-preview__image" />
-                  ) : null}
+                  <div 
+                    style={{
+                      ...getPositionStyle(clip.textPosition, !isVid),
+                      transform: `${getPositionStyle(clip.textPosition, !isVid).transform} rotate(${clip.rotation || 0}deg) scale(${clip.scale || 1}) translate(${clip.x || 0}px, ${clip.y || 0}px)`,
+                      opacity: clip.opacity ?? 1,
+                      clipPath: (clip.cropY || clip.cropX || clip.cropH || clip.cropW)
+                        ? `inset(${clip.cropY || 0}% ${clip.cropX || 0}% ${clip.cropH || 0}% ${clip.cropW || 0}%)`
+                        : "none",
+                      transition: "transform 0.15s ease-out, clip-path 0.15s ease-out",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: isVid ? "100%" : "auto",
+                      height: isVid ? "100%" : "auto",
+                      maxHeight: "100%",
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {isVid ? (
+                      <video
+                        ref={isMaster ? primaryVideoRef : null}
+                        src={clip.url}
+                        playsInline
+                        muted={activeAudioClipCount(clips) > 0}
+                        onTimeUpdate={isMaster ? handleTimeUpdate : undefined}
+                        onLoadedMetadata={isMaster ? handleLoadedMetadata : undefined}
+                        className="canvas-preview__video"
+                      />
+                    ) : isImg ? (
+                      <img src={clip.url} alt={clip.name} className="canvas-preview__image" />
+                    ) : null}
+                  </div>
                 </div>
               );
             })
@@ -267,18 +281,23 @@ export default function CanvasPreview({
           </button>
 
           {/* Text Overlays */}
-          {activeTextClips.map((textClip) => (
-            <div
-              key={textClip.id}
-              className="canvas-preview__text-overlay"
-              style={{
-                fontSize: `${textClip.fontSize || 36}px`,
-                color: textClip.fontColor || "#ffffff",
-              }}
-            >
-              {textClip.textContent || textClip.name}
-            </div>
-          ))}
+          {activeTextClips.map((textClip) => {
+            const posStyle = getPositionStyle(textClip.textPosition, true);
+            return (
+              <div
+                key={textClip.id}
+                className="canvas-preview__text-overlay"
+                style={{
+                  fontSize: `${textClip.fontSize || 36}px`,
+                  color: textClip.fontColor || "#ffffff",
+                  fontFamily: textClip.fontFamily || "Poppins, sans-serif",
+                  ...posStyle
+                }}
+              >
+                {textClip.textContent || textClip.name}
+              </div>
+            );
+          })}
         </div>
 
         {/* Audio Elements */}
@@ -355,4 +374,26 @@ export default function CanvasPreview({
 
 function activeAudioClipCount(clips) {
   return clips.filter((c) => c.trackType === "AUDIO").length;
+}
+
+function getPositionStyle(positionName, isOverlay = false) {
+  const base = { position: "absolute" };
+  const d = isOverlay ? "20px" : "0px"; // padding from edge
+  
+  if (!positionName && !isOverlay) {
+    return { ...base, top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
+  }
+  
+  switch (positionName) {
+    case "Top Left": return { ...base, top: d, left: d, transform: "none" };
+    case "Top Center": return { ...base, top: d, left: "50%", transform: "translateX(-50%)" };
+    case "Top Right": return { ...base, top: d, right: d, transform: "none" };
+    case "Center Left": return { ...base, top: "50%", left: d, transform: "translateY(-50%)" };
+    case "Center": return { ...base, top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
+    case "Center Right": return { ...base, top: "50%", right: d, transform: "translateY(-50%)" };
+    case "Bottom Left": return { ...base, bottom: d, left: d, transform: "none" };
+    case "Bottom Right": return { ...base, bottom: d, right: d, transform: "none" };
+    case "Bottom Center": 
+    default: return { ...base, bottom: d, left: "50%", transform: "translateX(-50%)" }; 
+  }
 }

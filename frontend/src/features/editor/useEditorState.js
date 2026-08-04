@@ -162,6 +162,8 @@ export default function useEditorState(projectId) {
               textContent: clip.textContent,
               fontSize: clip.fontSize ?? 36,
               fontColor: clip.fontColor ?? "#ffffff",
+              fontFamily: clip.fontFamily || "Poppins",
+              textPosition: clip.textPosition || (isText ? "Bottom Center" : "Top Right"),
               url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null,
             };
           }),
@@ -220,6 +222,28 @@ export default function useEditorState(projectId) {
         setSelectedClipId(created.id);
       } catch (err) {
         alert(err.message || "Gagal menambahkan teks ke timeline");
+      }
+    },
+    [projectId, currentTime, loadTimeline],
+  );
+
+  // Tambah image overlay ke track (default di currentTime)
+  const addImageOverlay = useCallback(
+    async (media, targetTrackId) => {
+      if (!projectId || !media) return;
+      try {
+        await apiFetch(`/projects/${projectId}/timeline/clips`, {
+          method: "POST",
+          body: JSON.stringify({
+            mediaId: media.id,
+            trackId: targetTrackId,
+            timelineStart: currentTime,
+            duration: 5, // Default duration for image overlay
+          }),
+        });
+        await loadTimeline();
+      } catch (err) {
+        alert(err.message || "Gagal menambahkan image overlay ke timeline");
       }
     },
     [projectId, currentTime, loadTimeline],
@@ -578,6 +602,7 @@ export default function useEditorState(projectId) {
     updateClipProperties,
     moveClipToTrack,
     addClipToTimeline,
+    addImageOverlay,
     addTextClip,
     addTrack,
     deleteTrack,

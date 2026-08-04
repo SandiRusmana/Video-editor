@@ -12,29 +12,66 @@ function fromMMSS(value) {
   return m * 60 + s;
 }
 
-export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties }) {
+const FONTS = [
+  "Poppins",
+  "Inter",
+  "Roboto",
+  "Montserrat",
+  "Open Sans",
+  "Lato",
+  "Outfit",
+];
+
+const POSITIONS = [
+  "Top Left",
+  "Top Center",
+  "Top Right",
+  "Center Left",
+  "Center",
+  "Center Right",
+  "Bottom Left",
+  "Bottom Center",
+  "Bottom Right",
+];
+
+export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties, onDeleteClip }) {
   const [startInput, setStartInput] = useState("00:00");
   const [endInput, setEndInput] = useState("00:00");
 
   const [textInput, setTextInput] = useState("");
   const [fontColorInput, setFontColorInput] = useState("#ffffff");
   const [fontSizeInput, setFontSizeInput] = useState(36);
+  const [fontFamilyInput, setFontFamilyInput] = useState("Poppins");
+  const [textPositionInput, setTextPositionInput] = useState("Bottom Center");
 
   const [posXInput, setPosXInput] = useState(0);
   const [posYInput, setPosYInput] = useState(0);
 
   const [scaleInput, setScaleInput] = useState(1);
+  const [opacityInput, setOpacityInput] = useState(1);
+  const [rotationInput, setRotationInput] = useState(0);
+  const [imagePositionInput, setImagePositionInput] = useState("Top Right");
+
 
   useEffect(() => {
     if (clip) {
       setStartInput(toMMSS(clip.trimStart));
       setEndInput(toMMSS(clip.trimEnd));
-      setTextInput(clip.textContent || clip.name || "");
-      setFontColorInput(clip.fontColor || "#ffffff");
-      setFontSizeInput(clip.fontSize || 36);
+      
+      if (clip.type === "text" || clip.trackType === "TEXT" || !!clip.textContent) {
+        setTextInput(clip.textContent || clip.name || "");
+        setFontColorInput(clip.fontColor || "#ffffff");
+        setFontSizeInput(clip.fontSize || 36);
+        setFontFamilyInput(clip.fontFamily || "Poppins");
+        setTextPositionInput(clip.textPosition || "Bottom Center");
+      }
+      
       setPosXInput(clip.x ?? 0);
       setPosYInput(clip.y ?? 0);
       setScaleInput(clip.scale ?? 1);
+      setOpacityInput(clip.opacity ?? 1);
+      setRotationInput(clip.rotation ?? 0);
+      setImagePositionInput(clip.textPosition || "Top Right"); // Reusing textPosition field for simplicity
     }
   }, [clip]);
 
@@ -48,6 +85,7 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
   }
 
   const isTextClip = clip.type === "text" || clip.trackType === "TEXT" || !!clip.textContent;
+  const isImageClip = clip.type === "image";
 
   const commitStart = () => onUpdateTrim && onUpdateTrim(clip.id, { trimStart: fromMMSS(startInput) });
   const commitEnd = () => onUpdateTrim && onUpdateTrim(clip.id, { trimEnd: fromMMSS(endInput) });
@@ -67,12 +105,67 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
   };
 
   const commitFontSize = (e) => {
-    const val = parseInt(e.target.value, 10) || 36;
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val)) val = 36;
     setFontSizeInput(val);
     if (onUpdateProperties) {
       onUpdateProperties(clip.id, { fontSize: val });
     }
   };
+
+  const commitFontFamily = (e) => {
+    const val = e.target.value;
+    setFontFamilyInput(val);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { fontFamily: val });
+    }
+  };
+
+  const commitTextPosition = (e) => {
+    const val = e.target.value;
+    setTextPositionInput(val);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { textPosition: val });
+    }
+  };
+  
+  const commitImagePosition = (e) => {
+    const val = e.target.value;
+    setImagePositionInput(val);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { textPosition: val });
+    }
+  }
+
+  const commitScale = (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val)) val = 100;
+    const decimalScale = val / 100;
+    setScaleInput(decimalScale);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { scale: decimalScale });
+    }
+  };
+
+  const commitOpacity = (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val)) val = 100;
+    const decimalOpacity = val / 100;
+    setOpacityInput(decimalOpacity);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { opacity: decimalOpacity });
+    }
+  };
+
+  const commitRotation = (e) => {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val)) val = 0;
+    setRotationInput(val);
+    if (onUpdateProperties) {
+      onUpdateProperties(clip.id, { rotation: val });
+    }
+  };
+
 
   const commitPosX = () => {
     const val = parseInt(posXInput, 10) || 0;
@@ -98,23 +191,170 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
     }
   };
 
-  const commitScale = (val) => {
-    const num = parseFloat(val);
-    const clamped = isNaN(num) ? 1 : Math.max(0.1, Math.min(3, num));
-    setScaleInput(clamped);
-    if (onUpdateProperties) {
-      onUpdateProperties(clip.id, { scale: clamped });
-    }
-  };
+  // --- RENDERING MODES ---
 
-  const resetScale = () => {
-    setScaleInput(1);
-    if (onUpdateProperties) {
-      onUpdateProperties(clip.id, { scale: 1 });
-    }
-  };
+  if (isTextClip) {
+    return (
+      <aside className="properties-panel">
+        <h3 className="properties-panel__main-title"><span className="icon-t">T</span> TEXT PROPERTIES</h3>
+        
+        <div className="properties-panel__card">
+          <div className="properties-panel__form-group">
+            <label>Content</label>
+            <input
+              type="text"
+              className="properties-panel__input-full"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onBlur={commitText}
+              onKeyDown={(e) => e.key === "Enter" && commitText()}
+              placeholder="Enter text..."
+            />
+          </div>
 
+          <div className="properties-panel__form-group">
+            <label>Font</label>
+            <select
+              className="properties-panel__select-full"
+              value={fontFamilyInput}
+              onChange={commitFontFamily}
+            >
+              {FONTS.map(f => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+          </div>
 
+          <div className="properties-panel__row-split">
+            <div className="properties-panel__form-group">
+              <label>Size</label>
+              <div className="input-with-suffix">
+                <input
+                  type="number"
+                  value={fontSizeInput}
+                  onChange={(e) => setFontSizeInput(e.target.value)}
+                  onBlur={commitFontSize}
+                  onKeyDown={(e) => e.key === "Enter" && commitFontSize(e)}
+                />
+                <span>px</span>
+              </div>
+            </div>
+            <div className="properties-panel__form-group">
+              <label>Color</label>
+              <div className="color-picker-group">
+                <input
+                  type="color"
+                  className="color-swatch"
+                  value={fontColorInput}
+                  onChange={commitColor}
+                />
+                <span className="color-hex">{fontColorInput.toUpperCase()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="properties-panel__form-group">
+            <label>Position</label>
+            <select
+              className="properties-panel__select-full"
+              value={textPositionInput}
+              onChange={commitTextPosition}
+            >
+              {POSITIONS.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  if (isImageClip) {
+    return (
+      <aside className="properties-panel">
+        <h3 className="properties-panel__main-title">🖼️ IMAGE PROPERTIES</h3>
+        
+        <div className="properties-panel__card">
+          <div className="properties-panel__form-group">
+            <label>Media</label>
+            <div className="media-name-badge">
+              <span className="media-icon">🖼️</span>
+              <span className="media-text" title={clip.name}>{clip.name}</span>
+            </div>
+          </div>
+
+          <div className="properties-panel__row-split">
+            <div className="properties-panel__form-group">
+              <label>Scale</label>
+              <div className="input-with-suffix">
+                <input
+                  type="number"
+                  value={Math.round(scaleInput * 100)}
+                  onChange={(e) => setScaleInput(e.target.value / 100)}
+                  onBlur={commitScale}
+                  onKeyDown={(e) => e.key === "Enter" && commitScale(e)}
+                />
+                <span>%</span>
+              </div>
+            </div>
+            <div className="properties-panel__form-group">
+              <label>Opacity</label>
+              <div className="input-with-suffix">
+                <input
+                  type="number"
+                  value={Math.round(opacityInput * 100)}
+                  onChange={(e) => setOpacityInput(e.target.value / 100)}
+                  onBlur={commitOpacity}
+                  onKeyDown={(e) => e.key === "Enter" && commitOpacity(e)}
+                  min="0"
+                  max="100"
+                />
+                <span>%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="properties-panel__row-split">
+            <div className="properties-panel__form-group">
+              <label>Position</label>
+              <select
+                className="properties-panel__select-full"
+                value={imagePositionInput}
+                onChange={commitImagePosition}
+              >
+                {POSITIONS.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+            <div className="properties-panel__form-group">
+              <label>Rotation</label>
+              <div className="input-with-suffix">
+                <input
+                  type="number"
+                  value={rotationInput}
+                  onChange={(e) => setRotationInput(e.target.value)}
+                  onBlur={commitRotation}
+                  onKeyDown={(e) => e.key === "Enter" && commitRotation(e)}
+                />
+                <span>°</span>
+              </div>
+            </div>
+          </div>
+
+          <button 
+            className="btn-remove-overlay"
+            onClick={() => onDeleteClip && onDeleteClip(clip.id)}
+          >
+            🗑️ Remove Overlay
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  // DEFAULT (Video / Audio)
   return (
     <aside className="properties-panel">
       <h3>⚙️ PROPERTIES</h3>
@@ -133,47 +373,6 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
         </div>
       </div>
 
-      {/* CARD 2: TEXT CONTROL (IF TEXT CLIP) */}
-      {isTextClip && (
-        <div className="properties-panel__card">
-          <span className="properties-panel__section-title">TEKS OVERLAY</span>
-          <div className="properties-panel__row">
-            <label>Teks</label>
-            <input
-              type="text"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              onBlur={commitText}
-              onKeyDown={(e) => e.key === "Enter" && commitText()}
-              style={{ width: "120px", textAlign: "left" }}
-            />
-          </div>
-
-          <div className="properties-panel__row">
-            <label>Warna</label>
-            <input
-              type="color"
-              value={fontColorInput}
-              onChange={commitColor}
-              style={{ width: "45px", padding: "1px 2px", height: "26px", cursor: "pointer" }}
-            />
-          </div>
-
-          <div className="properties-panel__row">
-            <label>Ukuran</label>
-            <input
-              type="number"
-              value={fontSizeInput}
-              min="12"
-              max="120"
-              onChange={(e) => setFontSizeInput(e.target.value)}
-              onBlur={commitFontSize}
-              onKeyDown={(e) => e.key === "Enter" && commitFontSize(e)}
-            />
-          </div>
-        </div>
-      )}
-
       {/* CARD 3: TIMING / TRIM */}
       <div className="properties-panel__card">
         <span className="properties-panel__section-title">TIMING / TRIM</span>
@@ -181,6 +380,7 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
           <label>Waktu Mulai</label>
           <input
             type="text"
+            className="time-input"
             value={startInput}
             onChange={(e) => setStartInput(e.target.value)}
             onBlur={commitStart}
@@ -192,6 +392,7 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
           <label>Waktu Selesai</label>
           <input
             type="text"
+            className="time-input"
             value={endInput}
             onChange={(e) => setEndInput(e.target.value)}
             onBlur={commitEnd}
@@ -200,130 +401,57 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
         </div>
       </div>
 
-      {/* CARD 4: ROTASI CONTROL */}
-      <div className="properties-panel__card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span className="properties-panel__section-title">ROTASI</span>
-          <span className="badge-value">{clip.rotation || 0}°</span>
-        </div>
-
-        <div className="btn-rotate-group">
-          <button
-            type="button"
-            className="btn-rotate"
-            title="Putar 90° Searah Jarum Jam"
-            onClick={() => {
-              const nextRot = ((clip.rotation || 0) + 90) % 360;
-              onUpdateProperties && onUpdateProperties(clip.id, { rotation: nextRot });
-            }}
-          >
-            ↻ +90°
-          </button>
-          <button
-            type="button"
-            className="btn-rotate"
-            title="Putar 90° Berlawanan Arah Jarum Jam"
-            onClick={() => {
-              const nextRot = ((clip.rotation || 0) - 90 + 360) % 360;
-              onUpdateProperties && onUpdateProperties(clip.id, { rotation: nextRot });
-            }}
-          >
-            ↺ -90°
-          </button>
-          <button
-            type="button"
-            className="btn-rotate btn-rotate--reset"
-            title="Reset Rotasi ke 0°"
-            onClick={() => {
-              onUpdateProperties && onUpdateProperties(clip.id, { rotation: 0 });
-            }}
-          >
-            0°
-          </button>
-        </div>
-
-        <div className="properties-panel__row">
-          <label>Sudut</label>
-          <input
-            type="range"
-            min="0"
-            max="360"
-            step="15"
-            value={clip.rotation || 0}
-            onChange={(e) => onUpdateProperties && onUpdateProperties(clip.id, { rotation: parseInt(e.target.value, 10) || 0 })}
-          />
-        </div>
-      </div>
-
-      {/* CARD 5: POSISI (POSITION) CONTROL */}
+      {/* CARD 5: POSITION / COORDINATES */}
       {clip.type !== "audio" && (
         <div className="properties-panel__card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="properties-panel__section-title">POSISI</span>
-            {(posXInput !== 0 || posYInput !== 0) && (
-              <button
-                type="button"
-                style={{ background: "none", border: "none", color: "#ef4444", fontSize: "11px", cursor: "pointer", fontWeight: "600" }}
-                onClick={resetPosition}
-              >
-                ↺ Reset
-              </button>
-            )}
-          </div>
+          <span className="properties-panel__section-title">⊕ POSITION / COORDINATES</span>
 
-          <div className="properties-panel__row">
-            <label>X</label>
+          <div className="position-field">
+            <label className="position-field__label">x Position</label>
             <input
               type="number"
+              className="position-field__input"
               value={posXInput}
               onChange={(e) => setPosXInput(e.target.value)}
               onBlur={commitPosX}
               onKeyDown={(e) => e.key === "Enter" && commitPosX()}
-              style={{ width: "75px" }}
             />
           </div>
 
-          <div className="properties-panel__row">
-            <label>Y</label>
+          <div className="position-field">
+            <label className="position-field__label">Y Position</label>
             <input
               type="number"
+              className="position-field__input"
               value={posYInput}
               onChange={(e) => setPosYInput(e.target.value)}
               onBlur={commitPosY}
               onKeyDown={(e) => e.key === "Enter" && commitPosY()}
-              style={{ width: "75px" }}
             />
           </div>
 
-          <div className="btn-preset-group">
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={() => {
-                setPosXInput(-100);
-                onUpdateProperties && onUpdateProperties(clip.id, { x: -100 });
-              }}
-            >
-              ← Kiri
-            </button>
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={resetPosition}
-            >
-              Tengah
-            </button>
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={() => {
-                setPosXInput(100);
-                onUpdateProperties && onUpdateProperties(clip.id, { x: 100 });
-              }}
-            >
-              Kanan →
-            </button>
+          <label className="position-field__label" style={{ marginTop: "4px" }}>Align</label>
+          <div className="align-grid">
+            <button type="button" className="align-grid__btn" title="Kiri Atas" onClick={() => { setPosXInput(-200); setPosYInput(-200); onUpdateProperties && onUpdateProperties(clip.id, { x: -200, y: -200 }); }}>↖</button>
+            <button type="button" className="align-grid__btn" title="Atas Tengah" onClick={() => { setPosXInput(0); setPosYInput(-200); onUpdateProperties && onUpdateProperties(clip.id, { x: 0, y: -200 }); }}>↑</button>
+            <button type="button" className="align-grid__btn" title="Kanan Atas" onClick={() => { setPosXInput(200); setPosYInput(-200); onUpdateProperties && onUpdateProperties(clip.id, { x: 200, y: -200 }); }}>↗</button>
+
+            <button type="button" className="align-grid__btn" title="Kiri Tengah" onClick={() => { setPosXInput(-200); setPosYInput(0); onUpdateProperties && onUpdateProperties(clip.id, { x: -200, y: 0 }); }}>←</button>
+            <button type="button" className="align-grid__btn align-grid__btn--center" title="Tengah" onClick={resetPosition}>⊙</button>
+            <button type="button" className="align-grid__btn" title="Kanan Tengah" onClick={() => { setPosXInput(200); setPosYInput(0); onUpdateProperties && onUpdateProperties(clip.id, { x: 200, y: 0 }); }}>→</button>
+
+            <button type="button" className="align-grid__btn" title="Kiri Bawah" onClick={() => { setPosXInput(-200); setPosYInput(200); onUpdateProperties && onUpdateProperties(clip.id, { x: -200, y: 200 }); }}>↙</button>
+            <button type="button" className="align-grid__btn" title="Bawah Tengah" onClick={() => { setPosXInput(0); setPosYInput(200); onUpdateProperties && onUpdateProperties(clip.id, { x: 0, y: 200 }); }}>↓</button>
+            <button type="button" className="align-grid__btn" title="Kanan Bawah" onClick={() => { setPosXInput(200); setPosYInput(200); onUpdateProperties && onUpdateProperties(clip.id, { x: 200, y: 200 }); }}>↘</button>
           </div>
+
+          <button
+            type="button"
+            className="btn-reset-center"
+            onClick={resetPosition}
+          >
+            ⊙ Reset to Center
+          </button>
         </div>
       )}
 
@@ -350,75 +478,11 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
               }}
             />
           </div>
-
-          <div className="properties-panel__row">
-            <label>Nilai</label>
-            <input
-              type="number"
-              value={scaleInput}
-              min="0.1"
-              max="3"
-              step="0.05"
-              onChange={(e) => setScaleInput(e.target.value)}
-              onBlur={(e) => commitScale(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && commitScale(e.target.value)}
-              style={{ width: "65px" }}
-            />
-          </div>
-
-          <div className="btn-preset-group">
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={() => commitScale(0.5)}
-            >
-              0.5x
-            </button>
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={() => commitScale(0.75)}
-            >
-              0.75x
-            </button>
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={resetScale}
-            >
-              1x
-            </button>
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={() => commitScale(1.5)}
-            >
-              1.5x
-            </button>
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={() => commitScale(2)}
-            >
-              2x
-            </button>
-          </div>
-
-          {scaleInput !== 1 && (
-            <button
-              type="button"
-              className="btn-rotate btn-rotate--reset"
-              style={{ width: "100%" }}
-              onClick={resetScale}
-            >
-              ↺ Reset ke 1x
-            </button>
-          )}
         </div>
       )}
 
       {/* CARD 7: CROP MEDIA CONTROL */}
-      {(!isTextClip && clip.type !== "audio") && (
+      {clip.type !== "audio" && (
         <div className="properties-panel__card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span className="properties-panel__section-title">CROP MEDIA</span>
@@ -456,58 +520,6 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
               1:1 Square
             </button>
           </div>
-
-          <div className="properties-panel__row">
-            <label>Potong Atas</label>
-            <span className="badge-value">{clip.cropY || 0}%</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="70"
-            value={clip.cropY || 0}
-            style={{ width: "100%" }}
-            onChange={(e) => onUpdateProperties && onUpdateProperties(clip.id, { cropY: parseInt(e.target.value, 10) || 0 })}
-          />
-
-          <div className="properties-panel__row">
-            <label>Potong Bawah</label>
-            <span className="badge-value">{clip.cropH || 0}%</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="70"
-            value={clip.cropH || 0}
-            style={{ width: "100%" }}
-            onChange={(e) => onUpdateProperties && onUpdateProperties(clip.id, { cropH: parseInt(e.target.value, 10) || 0 })}
-          />
-
-          <div className="properties-panel__row">
-            <label>Potong Kiri</label>
-            <span className="badge-value">{clip.cropW || 0}%</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="70"
-            value={clip.cropW || 0}
-            style={{ width: "100%" }}
-            onChange={(e) => onUpdateProperties && onUpdateProperties(clip.id, { cropW: parseInt(e.target.value, 10) || 0 })}
-          />
-
-          <div className="properties-panel__row">
-            <label>Potong Kanan</label>
-            <span className="badge-value">{clip.cropX || 0}%</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="70"
-            value={clip.cropX || 0}
-            style={{ width: "100%" }}
-            onChange={(e) => onUpdateProperties && onUpdateProperties(clip.id, { cropX: parseInt(e.target.value, 10) || 0 })}
-          />
         </div>
       )}
     </aside>

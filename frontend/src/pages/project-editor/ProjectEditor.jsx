@@ -192,6 +192,7 @@ export default function ProjectEditor({
           clip={selectedClip}
           onUpdateTrim={updateClipTrim}
           onUpdateProperties={updateClipProperties}
+          onDeleteClip={deleteClip}
         />
       </div>
 
