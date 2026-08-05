@@ -164,6 +164,8 @@ export default function useEditorState(projectId) {
               fontColor: clip.fontColor ?? "#ffffff",
               fontFamily: clip.fontFamily || "Poppins",
               textPosition: clip.textPosition || (isText ? "Bottom Center" : "Top Right"),
+              volume: clip.volume ?? 1,
+              muted: clip.muted ?? false,
               url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null,
             };
           }),

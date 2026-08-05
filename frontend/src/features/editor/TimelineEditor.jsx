@@ -118,6 +118,7 @@ function Clip({ clip, isSelected, onSelect, onTrim, onDelete, onUpdateText }) {
   };
 
   const isTextClip = clip.type === "text" || clip.trackType === "TEXT" || !!clip.textContent;
+  const isAudioClip = clip.type === "audio" || clip.trackType === "AUDIO";
 
   return (
     <div
@@ -160,7 +161,15 @@ function Clip({ clip, isSelected, onSelect, onTrim, onDelete, onUpdateText }) {
           }}
         />
       ) : (
-        <span className="clip__label">{clip.name}</span>
+        <span className="clip__label">
+          {isAudioClip && <span style={{ marginRight: '6px' }}>{clip.muted ? '🔇' : '🔊'}</span>}
+          {clip.name}
+          {isAudioClip && (
+            <span style={{ opacity: 0.7, marginLeft: '4px', fontWeight: 'normal' }}>
+              (Trimmed {Math.floor(clip.duration)}s, Vol {clip.muted ? 0 : Math.round((clip.volume ?? 1) * 100)}%)
+            </span>
+          )}
+        </span>
       )}
 
       <span className="clip__duration">{formatTime(clip.duration)}</span>

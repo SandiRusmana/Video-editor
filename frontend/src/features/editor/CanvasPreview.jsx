@@ -81,13 +81,19 @@ export default function CanvasPreview({
       currentTime < c.timelineStart + c.duration
   );
 
+  // All Audio clips across all Audio Tracks
+  const allAudioClips = clips.filter(
+    (c) => c.trackType === "AUDIO" || c.type === "audio"
+  );
+
   // Active Audio clips across all Audio Tracks at currentTime
-  const activeAudioClips = clips.filter(
+  const activeAudioClips = allAudioClips.filter(
     (c) =>
-      (c.trackType === "AUDIO" || c.type === "audio") &&
       currentTime >= c.timelineStart &&
       currentTime < c.timelineStart + c.duration
   );
+
+  const isVideoMuted = masterVideoClip?.muted || allAudioClips.length > 0;
 
   const handleTogglePlay = () => {
     // Jika posisi waktu berada di akhir timeline (selesai), otomatis reset ke awal (0s) saat ditekan Play!
@@ -104,27 +110,34 @@ export default function CanvasPreview({
       }
     }
 
-    activeAudioClips.forEach((ac) => {
-      const el = audioRefs.current[ac.id];
-      if (el) {
-        if (!isPlaying) {
-          el.play().catch(console.error);
-        } else {
-          el.pause();
-        }
-      }
-    });
-
     onTogglePlay();
   };
 
-  const handleSeekDelta = (delta) => {
-    const newTime = Math.max(0, Math.min(totalDuration, currentTime + delta));
-    onSeek(newTime);
+  const performSeek = (newTime) => {
+    const targetTime = Math.max(0, Math.min(totalDuration, newTime));
+    onSeek(targetTime);
+
+    // Immediately sync video element native currentTime
+    if (primaryVideoRef.current && masterVideoClip && masterVideoClip.type === "video") {
+      const clipOffset = Math.max(0, targetTime - masterVideoClip.timelineStart);
+      const targetInFile = (masterVideoClip.trimStart ?? 0) + clipOffset;
+      primaryVideoRef.current.currentTime = targetInFile;
+    }
+
+    // Immediately sync all audio elements native currentTime
+    allAudioClips.forEach((ac) => {
+      const audioEl = audioRefs.current[ac.id];
+      if (audioEl && ac.url) {
+        const clipOffset = Math.max(0, targetTime - ac.timelineStart);
+        const targetInFile = (ac.trimStart ?? 0) + clipOffset;
+        audioEl.currentTime = targetInFile;
+      }
+    });
   };
 
-  const handleJumpToStart = () => onSeek(0);
-  const handleJumpToEnd = () => onSeek(totalDuration);
+  const handleSeekDelta = (delta) => performSeek(currentTime + delta);
+  const handleJumpToStart = () => performSeek(0);
+  const handleJumpToEnd = () => performSeek(totalDuration);
 
   // Sync Video Playback
   useEffect(() => {
@@ -152,33 +165,72 @@ export default function CanvasPreview({
     }
   }, [masterVideoClip, seekGeneration, isPlaying]);
 
-  // Sync Audio Playback & Position
+  // Sync Video Muted State dynamically on native DOM element
   useEffect(() => {
-    activeAudioClips.forEach((ac) => {
+    const videoEl = primaryVideoRef.current;
+    if (videoEl) {
+      videoEl.muted = isVideoMuted;
+    }
+  }, [isVideoMuted, masterVideoClip]);
+
+  // 1. Sync Audio Volume & Mute properties in real time
+  useEffect(() => {
+    allAudioClips.forEach((ac) => {
       const audioEl = audioRefs.current[ac.id];
-      if (!audioEl || !ac.url) return;
+      if (audioEl) {
+        audioEl.volume = Math.max(0, Math.min(1, ac.volume ?? 1));
+        audioEl.muted = ac.muted ?? false;
+      }
+    });
+  }, [allAudioClips]);
 
-      const clipOffset = Math.max(0, currentTime - ac.timelineStart);
-      const targetInFile = (ac.trimStart ?? 0) + clipOffset;
+  // 2. Handle External Manual Seek (drag playhead / click timeline)
+  const prevSeekGenRef = useRef(seekGeneration);
+  useEffect(() => {
+    if (prevSeekGenRef.current === seekGeneration) return;
+    prevSeekGenRef.current = seekGeneration;
 
-      if (isPlaying) {
-        if (audioEl.paused) {
-          audioEl.currentTime = targetInFile;
-          audioEl.play().catch(console.error);
-        } else if (Math.abs(audioEl.currentTime - targetInFile) > 0.8) {
-          audioEl.currentTime = targetInFile;
-        }
-      } else {
-        if (!audioEl.paused) audioEl.pause();
-        if (Math.abs(audioEl.currentTime - targetInFile) > 0.3) {
-          audioEl.currentTime = targetInFile;
+    performSeek(currentTime);
+  }, [seekGeneration]);
+
+  // 3. One-Way Audio Playback & Active Clip Boundary Controller
+  useEffect(() => {
+    // Clean up deleted/orphaned audio refs
+    Object.keys(audioRefs.current).forEach((id) => {
+      if (!allAudioClips.some((c) => c.id === id)) {
+        if (audioRefs.current[id]) {
+          audioRefs.current[id].pause();
+          delete audioRefs.current[id];
         }
       }
     });
-  }, [isPlaying, activeAudioClips, seekGeneration]);
+
+    allAudioClips.forEach((ac) => {
+      const audioEl = audioRefs.current[ac.id];
+      if (!audioEl || !ac.url) return;
+
+      const isCurrentlyActive =
+        currentTime >= ac.timelineStart &&
+        currentTime < ac.timelineStart + ac.duration;
+
+      if (isPlaying && isCurrentlyActive) {
+        if (audioEl.paused) {
+          const clipOffset = Math.max(0, currentTime - ac.timelineStart);
+          const targetInFile = (ac.trimStart ?? 0) + clipOffset;
+          audioEl.currentTime = targetInFile;
+          audioEl.play().catch(console.error);
+        }
+      } else {
+        if (!audioEl.paused) {
+          audioEl.pause();
+        }
+      }
+    });
+  }, [isPlaying, currentTime, allAudioClips]);
 
   const handleLoadedMetadata = (e) => {
     const videoEl = e.target;
+    videoEl.muted = isVideoMuted;
     if (videoEl.videoWidth && videoEl.videoHeight) {
       setAspectRatio(`${videoEl.videoWidth} / ${videoEl.videoHeight}`);
     }
@@ -276,6 +328,7 @@ export default function CanvasPreview({
 
               return (
                 <div
+                  key={clip.id}
                   className={`canvas-preview__layer ${isSelected ? "canvas-preview__layer--selected" : ""} ${isImg ? "canvas-preview__layer--image" : ""}`}
                   onMouseDown={(e) => handleMouseDown(e, clip)}
                   style={{
@@ -309,7 +362,7 @@ export default function CanvasPreview({
                         src={clip.url}
                         playsInline
                         autoPlay={isPlaying}
-                        muted={activeAudioClipCount(clips) > 0}
+                        muted={isVideoMuted}
                         onTimeUpdate={isMaster ? handleTimeUpdate : undefined}
                         onLoadedMetadata={isMaster ? handleLoadedMetadata : undefined}
                         onCanPlay={isMaster ? handleCanPlay : undefined}
@@ -360,10 +413,16 @@ export default function CanvasPreview({
         </div>
 
         {/* Audio Elements */}
-        {activeAudioClips.map((ac) => (
+        {allAudioClips.map((ac) => (
           <audio
             key={ac.id}
-            ref={(el) => (audioRefs.current[ac.id] = el)}
+            ref={(el) => {
+              if (el) {
+                audioRefs.current[ac.id] = el;
+                el.volume = Math.max(0, Math.min(1, ac.volume ?? 1));
+                el.muted = ac.muted ?? false;
+              }
+            }}
             src={ac.url}
             preload="auto"
             style={{ display: "none" }}
@@ -427,6 +486,24 @@ export default function CanvasPreview({
           <span>{formatTime(totalDuration)}</span>
         </div>
       </div>
+
+      {/* Active Audio Indicator */}
+      {activeAudioClips.length > 0 && (
+        <div className="canvas-preview__audio-indicators" style={{
+          padding: "8px 16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          borderTop: "1px solid #1a1f35"
+        }}>
+          {activeAudioClips.map(ac => (
+            <div key={ac.id} style={{ display: "flex", alignItems: "center", gap: "8px", color: "#10b981", fontSize: "13px" }}>
+              <span>{ac.muted ? '🔇' : '🔊'}</span>
+              <span>Playing: {ac.name} (Vol: {ac.muted ? 0 : Math.round((ac.volume ?? 1) * 100)}%)</span>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
