@@ -90,6 +90,11 @@ export default function CanvasPreview({
   );
 
   const handleTogglePlay = () => {
+    // Jika posisi waktu berada di akhir timeline (selesai), otomatis reset ke awal (0s) saat ditekan Play!
+    if (!isPlaying && currentTime >= totalDuration - 0.1) {
+      onSeek(0);
+    }
+
     const videoEl = primaryVideoRef.current;
     if (videoEl && masterVideoClip?.type === "video") {
       if (!isPlaying) {
@@ -126,9 +131,7 @@ export default function CanvasPreview({
     const videoEl = primaryVideoRef.current;
     if (!videoEl || !masterVideoClip || masterVideoClip.type !== "video") return;
     if (isPlaying) {
-      if (videoEl.readyState >= 1) {
-        videoEl.play().catch((err) => console.log("Autoplay blocked/interrupted:", err));
-      }
+      videoEl.play().catch((err) => console.log("Autoplay blocked/interrupted:", err));
     } else {
       videoEl.pause();
     }
@@ -143,10 +146,11 @@ export default function CanvasPreview({
     const clipOffset = Math.max(0, currentTime - masterVideoClip.timelineStart);
     const targetInFile = (masterVideoClip.trimStart ?? 0) + clipOffset;
 
-    if (Math.abs(videoEl.currentTime - targetInFile) > 0.3) {
+    // Only update currentTime on explicit seek or if drift is significant (> 0.8s)
+    if (Math.abs(videoEl.currentTime - targetInFile) > 0.8 || !isPlaying) {
       videoEl.currentTime = targetInFile;
     }
-  }, [currentTime, masterVideoClip, seekGeneration]);
+  }, [masterVideoClip, seekGeneration, isPlaying]);
 
   // Sync Audio Playback & Position
   useEffect(() => {
@@ -159,21 +163,19 @@ export default function CanvasPreview({
 
       if (isPlaying) {
         if (audioEl.paused) {
-          if (Math.abs(audioEl.currentTime - targetInFile) > 0.1) {
-            audioEl.currentTime = targetInFile;
-          }
+          audioEl.currentTime = targetInFile;
           audioEl.play().catch(console.error);
-        } else if (Math.abs(audioEl.currentTime - targetInFile) > 0.2) {
+        } else if (Math.abs(audioEl.currentTime - targetInFile) > 0.8) {
           audioEl.currentTime = targetInFile;
         }
       } else {
         if (!audioEl.paused) audioEl.pause();
-        if (Math.abs(audioEl.currentTime - targetInFile) > 0.1) {
+        if (Math.abs(audioEl.currentTime - targetInFile) > 0.3) {
           audioEl.currentTime = targetInFile;
         }
       }
     });
-  }, [isPlaying, currentTime, activeAudioClips, seekGeneration]);
+  }, [isPlaying, activeAudioClips, seekGeneration]);
 
   const handleLoadedMetadata = (e) => {
     const videoEl = e.target;
@@ -184,8 +186,14 @@ export default function CanvasPreview({
     const clipOffset = Math.max(0, currentTime - masterVideoClip.timelineStart);
     const targetInFile = (masterVideoClip.trimStart ?? 0) + clipOffset;
     videoEl.currentTime = targetInFile;
-    if (isPlaying && videoEl.paused) {
-      videoEl.play().catch(console.error);
+    if (isPlaying) {
+      videoEl.play().catch((err) => console.log("Play failed on metadata load:", err));
+    }
+  };
+
+  const handleCanPlay = (e) => {
+    if (isPlaying && e.target.paused) {
+      e.target.play().catch(console.error);
     }
   };
 
@@ -197,8 +205,8 @@ export default function CanvasPreview({
     const clipOffset = e.target.currentTime - (masterVideoClip.trimStart ?? 0);
     const clipDuration = masterVideoClip.trimEnd - masterVideoClip.trimStart;
 
-    if (clipOffset >= clipDuration) {
-      const nextTime = masterVideoClip.timelineStart + clipDuration;
+    if (clipOffset >= clipDuration - 0.05) {
+      const nextTime = masterVideoClip.timelineStart + clipDuration + 0.01;
       if (nextTime < totalDuration) {
         onSeek(nextTime);
       } else {
@@ -259,37 +267,58 @@ export default function CanvasPreview({
               const isImg = clip.type === "image";
               const isSelected = clip.id === selectedClipId;
 
+              const posStyle = getPositionStyle(clip.textPosition || (isImg ? "Top Right" : undefined), !isVid);
+              const baseT = posStyle.transform || "";
+              const transT = clip.x || clip.y ? `translate(${clip.x || 0}px, ${clip.y || 0}px)` : "";
+              const rotT = clip.rotation ? `rotate(${clip.rotation}deg)` : "";
+              const scaleT = clip.scale !== undefined ? `scale(${clip.scale})` : "";
+              const combinedTransform = [baseT, transT, rotT, scaleT].filter(Boolean).join(" ");
+
               return (
                 <div
-                  key={clip.id}
-                  className={`canvas-preview__layer ${isSelected ? "canvas-preview__layer--selected" : ""}`}
+                  className={`canvas-preview__layer ${isSelected ? "canvas-preview__layer--selected" : ""} ${isImg ? "canvas-preview__layer--image" : ""}`}
                   onMouseDown={(e) => handleMouseDown(e, clip)}
                   style={{
                     zIndex: index + 1,
-                    transform: `rotate(${clip.rotation || 0}deg) scale(${clip.scale || 1}) translate(${clip.x || 0}px, ${clip.y || 0}px)`,
-                    clipPath: (clip.cropY || clip.cropX || clip.cropH || clip.cropW)
-                      ? `inset(${clip.cropY || 0}% ${clip.cropX || 0}% ${clip.cropH || 0}% ${clip.cropW || 0}%)`
-                      : "none",
-                    opacity: clip.opacity ?? 1,
                     cursor: draggingClipId === clip.id ? "grabbing" : "grab",
                     outline: isSelected ? "2px dashed #6366f1" : "none",
                     outlineOffset: "2px",
-                    transition: draggingClipId === clip.id ? "none" : "transform 0.15s ease-out, clip-path 0.15s ease-out",
                   }}
                 >
-                  {isVid ? (
-                    <video
-                      ref={isMaster ? primaryVideoRef : null}
-                      src={clip.url}
-                      playsInline
-                      muted={activeAudioClipCount(clips) > 0}
-                      onTimeUpdate={isMaster ? handleTimeUpdate : undefined}
-                      onLoadedMetadata={isMaster ? handleLoadedMetadata : undefined}
-                      className="canvas-preview__video"
-                    />
-                  ) : isImg ? (
-                    <img src={clip.url} alt={clip.name} className="canvas-preview__image" />
-                  ) : null}
+                  <div 
+                    style={{
+                      ...posStyle,
+                      transform: combinedTransform || "none",
+                      opacity: clip.opacity ?? 1,
+                      clipPath: (clip.cropY || clip.cropX || clip.cropH || clip.cropW)
+                        ? `inset(${clip.cropY || 0}% ${clip.cropX || 0}% ${clip.cropH || 0}% ${clip.cropW || 0}%)`
+                        : "none",
+                      transition: draggingClipId === clip.id ? "none" : "transform 0.15s ease-out, clip-path 0.15s ease-out",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: isVid ? "100%" : "auto",
+                      height: isVid ? "100%" : "auto",
+                      maxHeight: isImg ? "45%" : "100%",
+                      maxWidth: isImg ? "45%" : "100%",
+                    }}
+                  >
+                    {isVid ? (
+                      <video
+                        ref={isMaster ? primaryVideoRef : null}
+                        src={clip.url}
+                        playsInline
+                        autoPlay={isPlaying}
+                        muted={activeAudioClipCount(clips) > 0}
+                        onTimeUpdate={isMaster ? handleTimeUpdate : undefined}
+                        onLoadedMetadata={isMaster ? handleLoadedMetadata : undefined}
+                        onCanPlay={isMaster ? handleCanPlay : undefined}
+                        className="canvas-preview__video"
+                      />
+                    ) : isImg ? (
+                      <img src={clip.url} alt={clip.name} className="canvas-preview__image" />
+                    ) : null}
+                  </div>
                 </div>
               );
             })
@@ -311,18 +340,23 @@ export default function CanvasPreview({
           </button>
 
           {/* Text Overlays */}
-          {activeTextClips.map((textClip) => (
-            <div
-              key={textClip.id}
-              className="canvas-preview__text-overlay"
-              style={{
-                fontSize: `${textClip.fontSize || 36}px`,
-                color: textClip.fontColor || "#ffffff",
-              }}
-            >
-              {textClip.textContent || textClip.name}
-            </div>
-          ))}
+          {activeTextClips.map((textClip) => {
+            const posStyle = getPositionStyle(textClip.textPosition, true);
+            return (
+              <div
+                key={textClip.id}
+                className="canvas-preview__text-overlay"
+                style={{
+                  fontSize: `${textClip.fontSize || 36}px`,
+                  color: textClip.fontColor || "#ffffff",
+                  fontFamily: textClip.fontFamily || "Poppins, sans-serif",
+                  ...posStyle
+                }}
+              >
+                {textClip.textContent || textClip.name}
+              </div>
+            );
+          })}
         </div>
 
         {/* Audio Elements */}
@@ -399,4 +433,31 @@ export default function CanvasPreview({
 
 function activeAudioClipCount(clips) {
   return clips.filter((c) => c.trackType === "AUDIO").length;
+}
+
+function getPositionStyle(positionName, isOverlay = false) {
+  const base = { position: "absolute" };
+  const d = isOverlay ? "16px" : "0px"; // padding from edge
+  
+  switch (positionName) {
+    case "Top Left":
+      return { ...base, top: d, left: d, right: "auto", bottom: "auto", transform: "" };
+    case "Top Center":
+      return { ...base, top: d, left: "50%", right: "auto", bottom: "auto", transform: "translateX(-50%)" };
+    case "Top Right":
+      return { ...base, top: d, right: d, left: "auto", bottom: "auto", transform: "" };
+    case "Center Left":
+      return { ...base, top: "50%", left: d, right: "auto", bottom: "auto", transform: "translateY(-50%)" };
+    case "Center":
+      return { ...base, top: "50%", left: "50%", right: "auto", bottom: "auto", transform: "translate(-50%, -50%)" };
+    case "Center Right":
+      return { ...base, top: "50%", right: d, left: "auto", bottom: "auto", transform: "translateY(-50%)" };
+    case "Bottom Left":
+      return { ...base, bottom: d, left: d, right: "auto", top: "auto", transform: "" };
+    case "Bottom Right":
+      return { ...base, bottom: d, right: d, left: "auto", top: "auto", transform: "" };
+    case "Bottom Center":
+    default:
+      return { ...base, bottom: d, left: "50%", right: "auto", top: "auto", transform: "translateX(-50%)" };
+  }
 }

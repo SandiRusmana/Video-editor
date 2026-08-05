@@ -162,6 +162,8 @@ export default function useEditorState(projectId) {
               textContent: clip.textContent,
               fontSize: clip.fontSize ?? 36,
               fontColor: clip.fontColor ?? "#ffffff",
+              fontFamily: clip.fontFamily || "Poppins",
+              textPosition: clip.textPosition || (isText ? "Bottom Center" : "Top Right"),
               url: clip.media?.path ? `${API_BASE}${clip.media.path}` : null,
             };
           }),
@@ -183,7 +185,7 @@ export default function useEditorState(projectId) {
 
   // Tambah clip media ke track
   const addClipToTimeline = useCallback(
-    async (media, targetTrackId) => {
+    async (media, targetTrackId, timelineStart) => {
       if (!projectId) return;
       try {
         await apiFetch(`/projects/${projectId}/timeline/clips`, {
@@ -191,6 +193,7 @@ export default function useEditorState(projectId) {
           body: JSON.stringify({
             mediaId: media.id,
             ...(targetTrackId ? { trackId: targetTrackId } : {}),
+            ...(timelineStart !== undefined ? { timelineStart } : {}),
           }),
         });
         await loadTimeline();
@@ -220,6 +223,28 @@ export default function useEditorState(projectId) {
         setSelectedClipId(created.id);
       } catch (err) {
         alert(err.message || "Gagal menambahkan teks ke timeline");
+      }
+    },
+    [projectId, currentTime, loadTimeline],
+  );
+
+  // Tambah image overlay ke track (default di currentTime)
+  const addImageOverlay = useCallback(
+    async (media, targetTrackId) => {
+      if (!projectId || !media) return;
+      try {
+        await apiFetch(`/projects/${projectId}/timeline/clips`, {
+          method: "POST",
+          body: JSON.stringify({
+            mediaId: media.id,
+            trackId: targetTrackId,
+            timelineStart: currentTime,
+            duration: 5, // Default duration for image overlay
+          }),
+        });
+        await loadTimeline();
+      } catch (err) {
+        alert(err.message || "Gagal menambahkan image overlay ke timeline");
       }
     },
     [projectId, currentTime, loadTimeline],
@@ -262,8 +287,13 @@ export default function useEditorState(projectId) {
           let newEnd = trimEnd ?? clip.trimEnd;
 
           newStart = Math.max(0, Math.min(newStart, clip.trimEnd - MIN_CLIP_DURATION));
+          const maxAllowedDuration =
+            clip.type === "image" || clip.type === "text" || clip.trackType === "TEXT" || !clip.mediaId
+              ? 9999
+              : clip.sourceDuration || 9999;
+
           newEnd = Math.min(
-            clip.sourceDuration || 9999,
+            maxAllowedDuration,
             Math.max(newEnd, clip.trimStart + MIN_CLIP_DURATION),
           );
 
@@ -572,12 +602,15 @@ export default function useEditorState(projectId) {
     timelineError,
     totalDuration,
     selectedClip,
+    selectedClipId,
     selectClip,
+    setSelectedClipId: selectClip,
     deselectClip,
     updateClipTrim,
     updateClipProperties,
     moveClipToTrack,
     addClipToTimeline,
+    addImageOverlay,
     addTextClip,
     addTrack,
     deleteTrack,

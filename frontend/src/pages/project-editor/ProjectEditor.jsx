@@ -100,9 +100,36 @@ export default function ProjectEditor({
     }
   };
 
-  const handleDropMedia = (mediaId, targetTrackId) => {
-    const media = mediaLibrary.find((m) => m.id === mediaId);
-    if (media) addClipToTimeline(media, targetTrackId);
+  const handleDropMedia = (mediaId, targetTrackId, timelineStart) => {
+    if (!mediaId) return;
+
+    const media = mediaLibrary.find(
+      (m) => String(m.id) === String(mediaId) || m.name === mediaId
+    ) || { id: mediaId, type: "VIDEO" };
+
+    const targetTrack = tracks.find((t) => t.id === targetTrackId);
+    let validTrackId = targetTrackId;
+
+    if (media.type) {
+      const typeUpper = (media.type || "").toUpperCase();
+      const isImage = typeUpper === "IMAGE";
+      const isVideo = typeUpper === "VIDEO";
+      const isAudio = typeUpper === "AUDIO";
+
+      if (isImage) {
+        // Untuk Image Overlay: utamakan Video Track 2 (Upper Track). Jika belum ada, kirim undefined agar backend buatkan Video Track 2
+        const videoTracks = tracks.filter((t) => t.type === "VIDEO");
+        validTrackId = videoTracks[1] ? videoTracks[1].id : undefined;
+      } else if (isVideo && targetTrack && targetTrack.type !== "VIDEO") {
+        const videoTrack = tracks.find((t) => t.type === "VIDEO");
+        validTrackId = videoTrack ? videoTrack.id : undefined;
+      } else if (isAudio && targetTrack && targetTrack.type !== "AUDIO") {
+        const audioTrack = tracks.find((t) => t.type === "AUDIO");
+        validTrackId = audioTrack ? audioTrack.id : undefined;
+      }
+    }
+
+    addClipToTimeline(media, validTrackId, timelineStart);
   };
 
   const handleSeekStart = () => {
@@ -126,6 +153,17 @@ export default function ProjectEditor({
 
   const cancelLogout = () => {
     setShowLogoutConfirm(false);
+  };
+
+  const handleAddMediaFromLibrary = (media) => {
+    const isImage = (media.type || "").toUpperCase() === "IMAGE";
+    if (isImage) {
+      // Untuk Image Overlay: utamakan Video Track 2 (upper track). Jika belum ada, kirim undefined agar backend otomatis buat Video Track 2
+      const upperVideoTrack = tracks.filter((t) => t.type === "VIDEO")[1];
+      addClipToTimeline(media, upperVideoTrack?.id);
+    } else {
+      addClipToTimeline(media);
+    }
   };
 
   return (
@@ -174,7 +212,7 @@ export default function ProjectEditor({
       <div className="project-editor__body">
         <MediaLibrary
           mediaList={mediaLibrary}
-          onAddToTimeline={addClipToTimeline}
+          onAddToTimeline={handleAddMediaFromLibrary}
           onUploadMedia={uploadMedia}
           onDeleteMedia={deleteMedia}
         />
@@ -187,14 +225,15 @@ export default function ProjectEditor({
           clips={clips}
           isSeeking={isSeeking}
           seekGeneration={seekGeneration}
-          selectedClipId={selectedClipId}
-          onSelectClip={setSelectedClipId}
+          selectedClipId={selectedClip?.id}
+          onSelectClip={selectClip}
           onUpdateProperties={updateClipProperties}
         />
         <PropertiesPanel
           clip={selectedClip}
           onUpdateTrim={updateClipTrim}
           onUpdateProperties={updateClipProperties}
+          onDeleteClip={deleteClip}
         />
       </div>
 

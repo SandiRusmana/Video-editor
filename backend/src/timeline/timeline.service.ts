@@ -48,6 +48,31 @@ export class TimelineService {
     });
   }
 
+  private async getOrCreateUpperVideoTrack(projectId: string) {
+    const videoTracks = await this.prisma.track.findMany({
+      where: { projectId, type: TrackType.VIDEO },
+      orderBy: { order: 'asc' },
+    });
+
+    if (videoTracks.length >= 2) {
+      return videoTracks[1]; // Video Track 2 (Upper Overlay Track)
+    }
+
+    if (videoTracks.length === 1) {
+      const trackCount = await this.prisma.track.count({ where: { projectId } });
+      return this.prisma.track.create({
+        data: {
+          projectId,
+          type: TrackType.VIDEO,
+          name: 'Video Track 2',
+          order: trackCount,
+        },
+      });
+    }
+
+    return this.getOrCreateTrack(projectId, TrackType.VIDEO);
+  }
+
   async createTrack(userId: string, projectId: string, dto: CreateTrackDto) {
     await this.assertProjectOwnership(userId, projectId);
     const trackCount = await this.prisma.track.count({ where: { projectId } });
@@ -141,8 +166,12 @@ export class TimelineService {
     } else if (dto.trackType) {
       track = await this.getOrCreateTrack(projectId, dto.trackType);
     } else if (media) {
-      const trackType = this.mapMediaTypeToTrackType(media.type);
-      track = await this.getOrCreateTrack(projectId, trackType);
+      if (media.type === 'IMAGE') {
+        track = await this.getOrCreateUpperVideoTrack(projectId);
+      } else {
+        const trackType = this.mapMediaTypeToTrackType(media.type);
+        track = await this.getOrCreateTrack(projectId, trackType);
+      }
     } else {
       // Text Clip
       track = await this.getOrCreateTrack(projectId, TrackType.TEXT);
@@ -169,6 +198,8 @@ export class TimelineService {
         textContent: dto.textContent ?? null,
         fontSize: dto.fontSize ?? (dto.textContent ? 36 : null),
         fontColor: dto.fontColor ?? (dto.textContent ? '#ffffff' : null),
+        fontFamily: dto.fontFamily ?? (dto.textContent ? 'Poppins' : null),
+        textPosition: dto.textPosition ?? (dto.textContent ? 'Bottom Center' : null),
       },
       include: {
         track: true,
@@ -257,6 +288,8 @@ export class TimelineService {
         textContent: clip.textContent,
         fontSize: clip.fontSize,
         fontColor: clip.fontColor,
+        fontFamily: clip.fontFamily,
+        textPosition: clip.textPosition,
         filter: clip.filter,
       },
       include: {
@@ -288,9 +321,10 @@ export class TimelineService {
       throw new BadRequestException('Titik awal (start time) tidak boleh lebih besar atau sama dengan titik akhir (end time)');
     }
 
-    const duration = clip.media?.duration ?? DEFAULT_IMAGE_DURATION;
-    if (outPoint > duration) {
-      throw new BadRequestException('Nilai trim tidak boleh melebihi durasi media asli');
+    if (clip.media && clip.media.duration != null && (clip.media.type === 'VIDEO' || clip.media.type === 'AUDIO')) {
+      if (outPoint > clip.media.duration) {
+        throw new BadRequestException('Nilai trim tidak boleh melebihi durasi media asli');
+      }
     }
     
     if (inPoint < 0) {

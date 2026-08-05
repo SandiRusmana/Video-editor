@@ -35,4 +35,12 @@ export class AddClipDto {
   @IsOptional()
   @IsString()
   fontColor?: string;
+
+  @IsOptional()
+  @IsString()
+  fontFamily?: string;
+
+  @IsOptional()
+  @IsString()
+  textPosition?: string;
 }
