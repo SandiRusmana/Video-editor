@@ -490,3 +490,31 @@
     transform: translateY(0);
   }
 }
+
+.timeline-editor__transition-btn {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 18px;
+  height: 18px;
+  background: #2a2e54;
+  border: 1px solid #6366f1;
+  border-radius: 4px;
+  color: white;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+}
+.timeline-editor__transition-btn:hover {
+  background: #6366f1;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+.timeline-editor__transition-btn--selected {
+  background: #6366f1;
+  box-shadow: 0 0 0 2px #fff, 0 0 8px #6366f1;
+}

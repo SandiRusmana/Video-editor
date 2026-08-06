@@ -34,7 +34,7 @@ const POSITIONS = [
   "Bottom Right",
 ];
 
-export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties, onDeleteClip }) {
+export default function PropertiesPanel({ clip, selectedTransition, onCloseTransition, onUpdateTrim, onUpdateProperties, onDeleteClip }) {
   const [startInput, setStartInput] = useState("00:00");
   const [endInput, setEndInput] = useState("00:00");
 
@@ -80,6 +80,62 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
       setMutedInput(clip.muted ?? false);
     }
   }, [clip]);
+
+  if (selectedTransition) {
+    return (
+      <aside className="properties-panel">
+        <h3 className="properties-panel__main-title" style={{ color: '#a5b4fc' }}>⚡ TRANSITION SETTINGS</h3>
+        
+        <div className="properties-panel__card">
+          <div className="properties-panel__form-group">
+            <label>Type</label>
+            <select className="properties-panel__select-full" defaultValue={selectedTransition.type}>
+              <option value="Fade">Fade</option>
+              <option value="Dissolve">Dissolve</option>
+              <option value="Wipe">Wipe</option>
+            </select>
+          </div>
+
+          <div className="properties-panel__form-group">
+            <label>Duration</label>
+            <div className="input-with-suffix">
+              <input type="number" step="0.1" defaultValue={selectedTransition.duration} />
+              <span>s</span>
+            </div>
+          </div>
+
+          <div className="properties-panel__form-group">
+            <label>Target</label>
+            <div className="media-name-badge">
+              <span className="media-text">Track {selectedTransition.trackId} Clips</span>
+            </div>
+          </div>
+
+          <button 
+            type="button"
+            className="btn-preset"
+            style={{ 
+              background: '#818cf8', color: '#fff', border: 'none', 
+              padding: '10px', marginTop: '8px', fontSize: '13px', 
+              fontWeight: '600', display: 'flex', justifyContent: 'center', gap: '8px' 
+            }}
+            onClick={onCloseTransition}
+          >
+             ↻ Apply Changes
+          </button>
+
+          <button 
+            type="button"
+            className="btn-remove-overlay"
+            onClick={onCloseTransition}
+            style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}
+          >
+            🗑️ Delete Transition
+          </button>
+        </div>
+      </aside>
+    );
+  }
 
   if (!clip) {
     return (

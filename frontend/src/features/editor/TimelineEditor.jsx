@@ -194,7 +194,9 @@ export default function TimelineEditor({
   timelineLoading = false,
   totalDuration = 0,
   selectedClipId = null,
+  selectedTransition = null,
   onSelectClip,
+  onSelectTransition,
   onTrimClip,
   onDeselect,
   currentTime = 0,
@@ -466,17 +468,39 @@ export default function TimelineEditor({
                           />
                         )}
 
-                        {trackClips.map((clip) => (
-                          <Clip
-                            key={clip.id}
-                            clip={clip}
-                            isSelected={clip.id === selectedClipId}
-                            onSelect={onSelectClip}
-                            onTrim={onTrimClip}
-                            onDelete={requestDeleteClip}
-                            onUpdateText={onUpdateClipProperties}
-                          />
-                        ))}
+                        {trackClips.map((clip, index) => {
+                          const nextClip = trackClips[index + 1];
+                          const isAdjacent = nextClip && Math.abs(nextClip.timelineStart - (clip.timelineStart + clip.duration)) < 0.1;
+                          return (
+                            <React.Fragment key={clip.id}>
+                              <Clip
+                                clip={clip}
+                                isSelected={clip.id === selectedClipId}
+                                onSelect={onSelectClip}
+                                onTrim={onTrimClip}
+                                onDelete={requestDeleteClip}
+                                onUpdateText={onUpdateClipProperties}
+                              />
+                              {isAdjacent && (
+                                <button
+                                  className={`timeline-editor__transition-btn ${selectedTransition?.leftClip?.id === clip.id ? "timeline-editor__transition-btn--selected" : ""}`}
+                                  style={{
+                                    left: (clip.timelineStart + clip.duration) * PIXELS_PER_SECOND,
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onSelectTransition) {
+                                      onSelectTransition({ leftClip: clip, rightClip: nextClip, trackId: track.id, type: "Fade", duration: 1.0 });
+                                    }
+                                  }}
+                                  title="Transition"
+                                >
+                                  ⚡
+                                </button>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
                     </div>
                   );

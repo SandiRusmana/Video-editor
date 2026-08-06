@@ -41,6 +41,23 @@ export default function ProjectEditor({
   } = useEditorState(projectId);
 
   const [projectName, setProjectName] = useState(initialProjectName || "Konten YouTube");
+  const [selectedTransition, setSelectedTransition] = useState(null);
+
+  const handleSelectClip = (clipId) => {
+    selectClip(clipId);
+    setSelectedTransition(null);
+  };
+
+  const handleSelectTransition = (transition) => {
+    setSelectedTransition(transition);
+    deselectClip();
+  };
+
+  const handleDeselectAll = () => {
+    deselectClip();
+    setSelectedTransition(null);
+  };
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(initialProjectName || "Konten YouTube");
 
@@ -187,12 +204,15 @@ export default function ProjectEditor({
           clips={clips}
           isSeeking={isSeeking}
           seekGeneration={seekGeneration}
+          selectedTransition={selectedTransition}
         />
         <PropertiesPanel
           clip={selectedClip}
+          selectedTransition={selectedTransition}
           onUpdateTrim={updateClipTrim}
           onUpdateProperties={updateClipProperties}
           onDeleteClip={deleteClip}
+          onCloseTransition={() => setSelectedTransition(null)}
         />
       </div>
 
@@ -202,9 +222,11 @@ export default function ProjectEditor({
         timelineLoading={timelineLoading}
         totalDuration={totalDuration}
         selectedClipId={selectedClip?.id}
-        onSelectClip={selectClip}
+        selectedTransition={selectedTransition}
+        onSelectClip={handleSelectClip}
+        onSelectTransition={handleSelectTransition}
         onTrimClip={updateClipTrim}
-        onDeselect={deselectClip}
+        onDeselect={handleDeselectAll}
         currentTime={currentTime}
         onSeek={setCurrentTime}
         onDropMedia={handleDropMedia}

@@ -16,6 +16,7 @@ export default function CanvasPreview({
   clips = [],
   isSeeking,
   seekGeneration,
+  selectedTransition,
 }) {
   const primaryVideoRef = useRef(null);
   const audioRefs = useRef({});
@@ -298,6 +299,48 @@ export default function CanvasPreview({
               </div>
             );
           })}
+
+          {/* Transition Overlay Mockup */}
+          {selectedTransition && (
+            <>
+              <div style={{
+                position: 'absolute',
+                top: '20px',
+                left: '20px',
+                color: '#e2e8f0',
+                fontSize: '16px',
+                fontWeight: '800',
+                textTransform: 'uppercase',
+                textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+                zIndex: 100,
+                pointerEvents: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <span style={{ letterSpacing: '0.05em' }}>"{selectedTransition.type.toUpperCase()} EFFECT IN ACTION"</span>
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>
+                  ({selectedTransition.leftClip?.name} → {selectedTransition.rightClip?.name})
+                </span>
+              </div>
+              <div style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                width: '36px',
+                height: '36px',
+                background: 'rgba(255,255,255,0.15)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '18px',
+                zIndex: 100,
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>⚡</div>
+            </>
+          )}
         </div>
 
         {/* Audio Elements */}
