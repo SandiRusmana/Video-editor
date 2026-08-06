@@ -22,7 +22,38 @@ export default function CanvasPreview({
 }) {
   const primaryVideoRef = useRef(null);
   const audioRefs = useRef({});
+  const containerRef = useRef(null);
   const [aspectRatio, setAspectRatio] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const el = containerRef.current;
+      if (el?.requestFullscreen) {
+        el.requestFullscreen().catch(console.error);
+      } else if (el?.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(console.error);
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
   // Dragging Canvas Clip Position
   const [draggingClipId, setDraggingClipId] = useState(null);
@@ -338,7 +369,7 @@ export default function CanvasPreview({
                     outlineOffset: "2px",
                   }}
                 >
-                  <div 
+                  <div
                     style={{
                       ...posStyle,
                       transform: combinedTransform || "none",
@@ -515,7 +546,7 @@ function activeAudioClipCount(clips) {
 function getPositionStyle(positionName, isOverlay = false) {
   const base = { position: "absolute" };
   const d = isOverlay ? "16px" : "0px"; // padding from edge
-  
+
   switch (positionName) {
     case "Top Left":
       return { ...base, top: d, left: d, right: "auto", bottom: "auto", transform: "" };

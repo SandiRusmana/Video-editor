@@ -570,16 +570,40 @@ export default function PropertiesPanel({ clip, onUpdateTrim, onUpdateProperties
             </button>
           </div>
 
-          <div className="properties-panel__form-group">
-            <label>Trim</label>
-            <div className="trim-display-box" style={{
-                background: '#1a1f35', border: '1px solid #2a2f4c',
-                padding: '10px', borderRadius: '4px', color: '#e2e8f0',
-                fontSize: '14px', fontWeight: '500'
-            }}>
-              {Math.floor(clip.trimStart)}s-{Math.floor(clip.trimEnd)}s
+          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "12px" }}>
+            <span className="properties-panel__section-title">✂️ TIMING / TRIM</span>
+            <div className="properties-panel__row" style={{ marginTop: "8px" }}>
+              <label>Waktu Mulai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={startInput}
+                onChange={(e) => setStartInput(e.target.value)}
+                onBlur={commitStart}
+                onKeyDown={(e) => e.key === "Enter" && commitStart()}
+              />
+            </div>
+
+            <div className="properties-panel__row" style={{ marginTop: "6px" }}>
+              <label>Waktu Selesai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={endInput}
+                onChange={(e) => setEndInput(e.target.value)}
+                onBlur={commitEnd}
+                onKeyDown={(e) => e.key === "Enter" && commitEnd()}
+              />
             </div>
           </div>
+
+          <button 
+            className="btn-remove-overlay"
+            style={{ marginTop: "12px" }}
+            onClick={() => onDeleteClip && onDeleteClip(clip.id)}
+          >
+            🗑️ Hapus Audio
+          </button>
         </div>
       </aside>
     );
