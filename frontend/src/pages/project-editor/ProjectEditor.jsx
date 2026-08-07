@@ -1,12 +1,58 @@
-import { useState, useRef, useEffect } from "react";
+import React, { Component, useState, useRef, useEffect } from "react";
 import MediaLibrary from "../../features/editor/MediaLibrary";
 import CanvasPreview from "../../features/editor/CanvasPreview";
 import PropertiesPanel from "../../features/editor/PropertiesPanel";
 import TimelineEditor from "../../features/editor/TimelineEditor";
 import useEditorState from "../../features/editor/useEditorState";
+import ExportModal from "../../features/editor/ExportModal";
 import "./ProjectEditor.css";
 
-export default function ProjectEditor({
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, background: "#0a0b18", color: "#ff6b6b", fontFamily: "monospace", height: "100vh", overflow: "auto" }}>
+          <h2 style={{ color: "#f87171", fontSize: "18px", marginBottom: "12px" }}>⚠️ Terjadi Error saat memuat Project Editor</h2>
+          <div style={{ background: "#1b1e38", padding: "16px", borderRadius: "8px", border: "1px solid #374151" }}>
+            <p style={{ fontWeight: "bold", color: "#fca5a5" }}>{this.state.error?.toString()}</p>
+            <pre style={{ color: "#9ca3af", fontSize: "12px", marginTop: "12px", whiteSpace: "pre-wrap" }}>{this.state.errorInfo?.componentStack}</pre>
+          </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            style={{ marginTop: "20px", padding: "8px 16px", background: "#7c6cf0", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer" }}
+          >
+            Refresh Halaman
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function ProjectEditorWrapper(props) {
+  return (
+    <ErrorBoundary>
+      <ProjectEditorInner {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function ProjectEditorInner({
   projectId,
   initialProjectName = "Konten YouTube",
   onKembaliKeDashboard,
@@ -63,8 +109,17 @@ export default function ProjectEditor({
 
   const [userName, setUserName] = useState("User");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const isSeeking = useRef(false);
   const [seekGeneration, setSeekGeneration] = useState(0);
+  const [saveStatus, setSaveStatus] = useState("Saved");
+
+  useEffect(() => {
+    if (timelineLoading) return;
+    setSaveStatus("Saving...");
+    const t = setTimeout(() => setSaveStatus("Saved"), 1000);
+    return () => clearTimeout(t);
+  }, [clips, tracks, projectName, timelineLoading]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -176,13 +231,27 @@ export default function ProjectEditor({
               >
                 ✎
               </button>
+              <span className={`save-status ${saveStatus === "Saved" ? "saved" : "saving"}`}>
+                {saveStatus === "Saved" ? "✓ Saved" : "Saving..."}
+              </span>
             </span>
           )}
         </nav>
 
         <div className="project-editor__user">
-          <span>👤 {userName}</span>
-          <button className="btn btn--ghost btn--sm" onClick={handleLogoutClick}>
+          <button
+            className="project-editor__btn-export"
+            onClick={() => setShowExportModal(true)}
+          >
+            🚀 Export Video
+          </button>
+          <div className="project-editor__user-profile">
+            <span className="project-editor__avatar-circle">
+              {userName.charAt(0).toUpperCase()}
+            </span>
+            <span className="project-editor__user-name">{userName}</span>
+          </div>
+          <button className="btn btn--ghost btn--sm project-editor__btn-logout" onClick={handleLogoutClick}>
             Logout
           </button>
         </div>
@@ -258,6 +327,13 @@ export default function ProjectEditor({
           </div>
         </div>
       )}
+
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        projectName={projectName}
+        totalDuration={totalDuration}
+      />
     </div>
   );
 }

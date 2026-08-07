@@ -60,14 +60,15 @@ export default function useEditorState(projectId) {
     setMediaError("");
     try {
       const data = await apiFetch(`/media?projectId=${projectId}`);
+      const safeMedia = Array.isArray(data) ? data : [];
       setMediaLibrary(
-        data.map((m) => ({
+        safeMedia.map((m) => ({
           id: m.id,
           name: m.name,
-          type: m.type.toLowerCase(),
+          type: (m.type || "video").toLowerCase(),
           sourceDuration: m.duration ?? 5,
           thumbnail: m.thumbnail ? `${API_BASE}${m.thumbnail}` : null,
-          url: `${API_BASE}${m.path}`,
+          url: m.path ? `${API_BASE}${m.path}` : null,
         })),
       );
     } catch (err) {
@@ -96,7 +97,7 @@ export default function useEditorState(projectId) {
           {
             id: created.id,
             name: created.name,
-            type: created.type.toLowerCase(),
+            type: (created.type || "video").toLowerCase(),
             sourceDuration: created.duration ?? 5,
             thumbnail: created.thumbnail ? `${API_BASE}${created.thumbnail}` : null,
             url: `${API_BASE}${created.path}`,
@@ -129,11 +130,12 @@ export default function useEditorState(projectId) {
     setTimelineError("");
     try {
       const trackData = await apiFetch(`/projects/${projectId}/timeline`);
-      setTracks(trackData);
+      const safeTracks = Array.isArray(trackData) ? trackData : [];
+      setTracks(safeTracks);
 
-      const flatClips = trackData
+      const flatClips = safeTracks
         .flatMap((track) =>
-          track.clips.map((clip) => {
+          (track.clips || []).map((clip) => {
             const isText = track.type === "TEXT" || !!clip.textContent;
             return {
               ...clip,
@@ -145,11 +147,11 @@ export default function useEditorState(projectId) {
               name: isText
                 ? clip.textContent || "Teks Baru"
                 : clip.media?.name ?? "(media tidak ditemukan)",
-              type: isText ? "text" : (clip.media?.type ?? "video").toLowerCase(),
-              sourceDuration: isText ? 9999 : (clip.media?.duration ?? clip.outPoint),
-              trimStart: clip.inPoint,
-              trimEnd: clip.outPoint,
-              timelineStart: clip.timelineStart,
+              type: isText ? "text" : (clip.media?.type || "video").toLowerCase(),
+              sourceDuration: isText ? 9999 : (clip.media?.duration ?? clip.outPoint ?? 5),
+              trimStart: clip.inPoint ?? 0,
+              trimEnd: clip.outPoint ?? 5,
+              timelineStart: clip.timelineStart ?? 0,
               x: clip.x ?? 0,
               y: clip.y ?? 0,
               scale: clip.scale ?? 1,
@@ -170,7 +172,7 @@ export default function useEditorState(projectId) {
             };
           }),
         )
-        .sort((a, b) => a.timelineStart - b.timelineStart);
+        .sort((a, b) => (a.timelineStart ?? 0) - (b.timelineStart ?? 0));
 
       setClips(flatClips);
     } catch (err) {
@@ -252,13 +254,14 @@ export default function useEditorState(projectId) {
   );
 
   const clipsWithLayout = useMemo(() => {
-    return clips.map((clip) => {
-      const duration = clip.trimEnd - clip.trimStart;
+    return (clips || []).map((clip) => {
+      const duration = (clip.trimEnd ?? 5) - (clip.trimStart ?? 0);
+      const validDuration = isNaN(duration) || duration <= 0 ? 1 : duration;
       return {
         ...clip,
-        duration,
-        left: clip.timelineStart * PIXELS_PER_SECOND,
-        width: duration * PIXELS_PER_SECOND,
+        duration: validDuration,
+        left: (clip.timelineStart ?? 0) * PIXELS_PER_SECOND,
+        width: validDuration * PIXELS_PER_SECOND,
       };
     });
   }, [clips]);

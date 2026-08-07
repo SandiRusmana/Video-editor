@@ -65,6 +65,30 @@
   color: #cfd0ec;
 }
 
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 6px;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.save-status.saved {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.save-status.saving {
+  background: rgba(124, 108, 240, 0.15);
+  color: #7c6cf0;
+  border-color: rgba(124, 108, 240, 0.3);
+}
+
 .project-editor__name-input {
   background: #1b1e38;
   border: 1px solid #7c6cf0;
@@ -80,9 +104,64 @@
 .project-editor__user {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   font-size: 13px;
   color: #cfd0ec;
+}
+
+.project-editor__btn-export {
+  background: #8b70f6;
+  border: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(139, 112, 246, 0.25);
+}
+
+.project-editor__btn-export:hover {
+  background: #795cf5;
+  box-shadow: 0 4px 12px rgba(139, 112, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.project-editor__user-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-editor__avatar-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #7c6cf0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(124, 108, 240, 0.3);
+}
+
+.project-editor__user-name {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.project-editor__btn-logout {
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  border: 1px solid #334155;
 }
 
 .btn--ghost {

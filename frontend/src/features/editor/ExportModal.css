@@ -1,0 +1,447 @@
+.export-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 7, 18, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.export-modal__card {
+  position: relative;
+  background: #16172f;
+  border: 1px solid #2c2f57;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  width: 400px;
+  max-width: 90vw;
+  padding: 24px;
+  color: #e2e8f0;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+.export-modal__close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.export-modal__close-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Header */
+.export-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.export-modal__icon-box {
+  width: 34px;
+  height: 34px;
+  background: #25284b;
+  border: 1px solid #3b3e6b;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.export-modal__icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.export-modal__icon-badge--success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1.5px solid #10b981;
+}
+
+.export-modal__icon-badge--failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1.5px solid #ef4444;
+}
+
+.export-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+}
+
+/* Body Form Controls */
+.export-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.export-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-modal__label {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Custom Radio Group */
+.export-modal__radio-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.export-modal__radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #cbd5e1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.export-modal__radio-label input[type="radio"] {
+  display: none;
+}
+
+.export-modal__radio-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #475569;
+  box-sizing: border-box;
+  display: inline-block;
+  position: relative;
+  transition: border-color 0.15s;
+}
+
+.export-modal__radio-label.active .export-modal__radio-dot {
+  border-color: #8b70f6;
+}
+
+.export-modal__radio-label.active .export-modal__radio-dot::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8b70f6;
+}
+
+/* Select Box */
+.export-modal__select-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.export-modal__select {
+  width: 100%;
+  background: #111226;
+  border: 1px solid #2f325c;
+  border-radius: 8px;
+  color: #f1f5f9;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.export-modal__select:focus {
+  border-color: #8b70f6;
+}
+
+.export-modal__select-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+/* Est Size Row */
+.export-modal__size-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+  border-top: 1px dashed #282a4d;
+}
+
+.export-modal__size-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+/* Dev Test Option */
+.export-modal__test-option {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.export-modal__test-option label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* Step 2: Info & Progress */
+.export-modal__info-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.export-modal__subtext {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: -8px;
+}
+
+.export-modal__progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.export-modal__progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.export-modal__progress-percent {
+  color: #8b70f6;
+  font-weight: 600;
+}
+
+.export-modal__progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #212344;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.export-modal__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c6cf0, #a084ff);
+  border-radius: 4px;
+  transition: width 0.08s linear;
+}
+
+/* Status Lines */
+.export-modal__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.export-modal__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.export-modal__status--processing {
+  color: #a78bfa;
+}
+.export-modal__status--processing .export-modal__status-dot {
+  background: #8b70f6;
+  box-shadow: 0 0 8px #8b70f6;
+}
+
+.export-modal__status--ready {
+  color: #10b981;
+}
+.export-modal__status--ready .export-modal__status-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.export-modal__status--failed {
+  color: #ef4444;
+}
+.export-modal__status--failed .export-modal__status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+/* Step 3: Success Grid */
+.export-modal__details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #111226;
+  border: 1px solid #282a4d;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.export-modal__detail-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.export-modal__detail-label {
+  color: #94a3b8;
+}
+
+.export-modal__detail-val {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+/* Step 4: Error Box */
+.export-modal__error-box {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #f87171;
+}
+
+.export-modal__error-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.export-modal__error-desc {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* Actions Footer */
+.export-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.export-modal__actions--split {
+  justify-content: space-between;
+}
+
+.export-modal__btn {
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.export-modal__btn--cancel {
+  background: transparent;
+  border: 1px solid #363963;
+  color: #cbd5e1;
+}
+.export-modal__btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.export-modal__btn--start {
+  background: #8b70f6;
+  border: none;
+  color: #ffffff;
+  font-weight: 600;
+  padding: 10px 28px;
+}
+.export-modal__btn--start:hover {
+  background: #7a5df5;
+  box-shadow: 0 4px 12px rgba(139, 112, 246, 0.35);
+}
+
+.export-modal__btn--wait {
+  width: 100%;
+  background: #252749;
+  border: 1px solid #373a6b;
+  color: #8b70f6;
+  font-weight: 600;
+  cursor: not-allowed;
+  padding: 12px;
+}
+
+.export-modal__btn--download {
+  width: 100%;
+  background: #10b981;
+  border: none;
+  color: #ffffff;
+  font-weight: 600;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.export-modal__btn--download:hover {
+  background: #059669;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.export-modal__btn--retry {
+  background: #8b70f6;
+  border: none;
+  color: #ffffff;
+  font-weight: 600;
+}
+.export-modal__btn--retry:hover {
+  background: #7a5df5;
+}

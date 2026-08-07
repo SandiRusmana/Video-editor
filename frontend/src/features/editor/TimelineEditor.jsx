@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect } from "react";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import { PIXELS_PER_SECOND } from "./useEditorState";
 import "./TimelineEditor.css";
 

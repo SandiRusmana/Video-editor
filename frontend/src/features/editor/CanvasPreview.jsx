@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import "./CanvasPreview.css";
 
 function formatTime(sec) {
