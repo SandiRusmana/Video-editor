@@ -243,7 +243,7 @@ function ProjectEditorInner({
             className="project-editor__btn-export"
             onClick={() => setShowExportModal(true)}
           >
-            🚀 Export Video
+          Export Video
           </button>
           <div className="project-editor__user-profile">
             <span className="project-editor__avatar-circle">
@@ -331,8 +331,11 @@ function ProjectEditorInner({
       <ExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
+        projectId={projectId}
         projectName={projectName}
         totalDuration={totalDuration}
+        clips={clips}
+        tracks={tracks}
       />
     </div>
   );

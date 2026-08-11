@@ -1,11 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./ExportModal.css";
+import {
+  addExportRecord,
+  updateExportRecord,
+  downloadExportedFile,
+} from "../../services/exportHistoryService";
 
 export default function ExportModal({
   isOpen,
   onClose,
+  projectId = "proj-1",
   projectName = "Konten YouTube",
   totalDuration = 20,
+  clips = [],
+  tracks = [],
 }) {
   // Steps: 'config' | 'exporting' | 'success' | 'failed'
   const [step, setStep] = useState("config");
@@ -13,13 +21,14 @@ export default function ExportModal({
   const [format, setFormat] = useState("MP4");
   const [progress, setProgress] = useState(0);
   const [simulateError, setSimulateError] = useState(false);
+  const currentRecordRef = useRef(null);
 
   // Calculate estimated file size based on resolution and duration
   const getEstSize = (res, durationSec) => {
     const dur = durationSec > 0 ? durationSec : 20;
     const baseMbPerMin = res === "1080p" ? 150 : 80;
     const estMb = (dur / 60) * baseMbPerMin;
-    return estMb < 10 ? estMb.toFixed(1) : Math.round(estMb);
+    return estMb < 10 ? Number(estMb.toFixed(1)) : Math.round(estMb);
   };
 
   const currentEstSize = getEstSize(resolution, totalDuration);
@@ -36,10 +45,11 @@ export default function ExportModal({
     if (isOpen) {
       setStep("config");
       setProgress(0);
+      currentRecordRef.current = null;
     }
   }, [isOpen]);
 
-  // Handle Export process simulation
+  // Handle Export process simulation & record saving
   useEffect(() => {
     let interval = null;
     if (step === "exporting") {
@@ -47,17 +57,74 @@ export default function ExportModal({
       const startTime = Date.now();
       const exportDuration = 3500; // 3.5 seconds total simulation
 
+      const fileName = `${projectName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.${format.toLowerCase()}`;
+
+      // Create new export record if not created yet
+      if (!currentRecordRef.current) {
+        const record = addExportRecord({
+          projectId,
+          projectName,
+          fileName,
+          resolution,
+          format,
+          sizeMb: currentEstSize,
+          status: "Rendering",
+          progress: 0,
+          editingData: {
+            totalDuration,
+            tracksCount: tracks ? tracks.length : 0,
+            clipsCount: clips ? clips.length : 0,
+            clips: (clips || []).map((c) => ({
+              id: c.id,
+              name: c.name,
+              type: c.type,
+              trimStart: c.trimStart,
+              trimEnd: c.trimEnd,
+              timelineStart: c.timelineStart,
+              volume: c.volume,
+              muted: c.muted,
+              scale: c.scale,
+              rotation: c.rotation,
+              opacity: c.opacity,
+            })),
+          },
+        });
+        currentRecordRef.current = record;
+      }
+
       interval = setInterval(() => {
         const elapsed = Date.now() - startTime;
         const currentProgress = Math.min(100, Math.floor((elapsed / exportDuration) * 100));
         setProgress(currentProgress);
 
+        if (currentRecordRef.current) {
+          updateExportRecord(currentRecordRef.current.id, {
+            progress: currentProgress,
+          });
+        }
+
         if (currentProgress >= 100) {
           clearInterval(interval);
           setTimeout(() => {
             if (simulateError) {
+              if (currentRecordRef.current) {
+                updateExportRecord(currentRecordRef.current.id, {
+                  status: "Failed",
+                  progress: 0,
+                  sizeMb: 0,
+                  errorMessage: "FFmpeg Rendering Error",
+                });
+              }
               setStep("failed");
             } else {
+              if (currentRecordRef.current) {
+                updateExportRecord(currentRecordRef.current.id, {
+                  status: "Done",
+                  progress: 100,
+                  sizeMb: currentEstSize,
+                  errorMessage: null,
+                });
+              }
               setStep("success");
             }
           }, 300);
@@ -67,7 +134,7 @@ export default function ExportModal({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [step, simulateError]);
+  }, [step, simulateError, projectId, projectName, format, resolution, currentEstSize, totalDuration, clips, tracks]);
 
   if (!isOpen) return null;
 
@@ -80,17 +147,18 @@ export default function ExportModal({
   };
 
   const handleDownload = () => {
-    // Generate a dummy downloadable text/video blob in pure frontend
-    const fileContent = `Demo Exported Video File\nProject: ${projectName}\nResolution: ${resolution}\nFormat: ${format}\nDuration: ${formatDuration(totalDuration)}`;
-    const blob = new Blob([fileContent], { type: "video/mp4" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${resolution}.${format.toLowerCase()}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (currentRecordRef.current) {
+      downloadExportedFile(currentRecordRef.current);
+    } else {
+      downloadExportedFile({
+        projectName,
+        fileName: `${projectName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.${format.toLowerCase()}`,
+        resolution,
+        format,
+        sizeDisplay: `${currentEstSize} MB`,
+        status: "Done",
+      });
+    }
   };
 
   return (
@@ -166,7 +234,7 @@ export default function ExportModal({
 
               <div className="export-modal__size-row">
                 <span className="export-modal__label">Est. Size</span>
-                <span className="export-modal__size-val">~{currentEstSize}mb</span>
+                <span className="export-modal__size-val">~{currentEstSize} MB</span>
               </div>
 
               {/* Dev/Testing mode option to simulate error */}
@@ -264,7 +332,7 @@ export default function ExportModal({
                 </div>
                 <div className="export-modal__detail-item">
                   <span className="export-modal__detail-label">Size</span>
-                  <span className="export-modal__detail-val">{currentEstSize},4 MB</span>
+                  <span className="export-modal__detail-val">{currentEstSize} MB</span>
                 </div>
                 <div className="export-modal__detail-item">
                   <span className="export-modal__detail-label">Duration</span>
@@ -274,7 +342,7 @@ export default function ExportModal({
 
               <div className="export-modal__status export-modal__status--ready">
                 <span className="export-modal__status-dot"></span>
-                <span>Status: Ready!</span>
+                <span>Status: Saved to Export History!</span>
               </div>
             </div>
 
