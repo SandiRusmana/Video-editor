@@ -535,4 +535,252 @@
     padding: 8px 12px;
     font-size: 14px;
   }
+
+  .sys-health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sys-env-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .sys-env-label {
+    width: auto;
+  }
 }
+
+/* System Status Tab Styles */
+.sys-status-section {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.sys-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sys-status-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.sys-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.sys-live-dot {
+  width: 7px;
+  height: 7px;
+  background-color: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #22c55e;
+  animation: sys-pulse 2s infinite;
+}
+
+@keyframes sys-pulse {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 6px #22c55e;
+  }
+  50% {
+    opacity: 0.4;
+    box-shadow: 0 0 2px #22c55e;
+  }
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 6px #22c55e;
+  }
+}
+
+.sys-env-card {
+  background: rgba(20, 20, 48, 0.6);
+  border: 1px solid rgba(138, 92, 246, 0.25);
+  border-radius: 14px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.sys-env-row {
+  display: flex;
+  align-items: center;
+  font-size: 13.5px;
+}
+
+.sys-env-label {
+  width: 140px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.sys-env-link {
+  color: #a78bfa;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.sys-env-link:hover {
+  color: #c4b5fd;
+  text-decoration: underline;
+}
+
+.sys-env-value-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sys-env-env-text {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+.sys-ssl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.sys-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sys-health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.sys-health-card {
+  background: rgba(20, 20, 48, 0.6);
+  border: 1px solid rgba(138, 92, 246, 0.25);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.sys-health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sys-health-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sys-progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.sys-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8 0%, #a855f7 100%);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.sys-health-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sys-services-card {
+  background: rgba(20, 20, 48, 0.6);
+  border: 1px solid rgba(138, 92, 246, 0.25);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.sys-service-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sys-service-row:last-child {
+  border-bottom: none;
+}
+
+.sys-service-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.sys-service-status {
+  font-size: 12.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.3px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  display: inline-block;
+}
+
+.status-running,
+.status-connected,
+.status-ready {
+  color: #22c55e;
+}
+
+.status-subtext {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11.5px;
+  margin-left: 2px;
+}
+

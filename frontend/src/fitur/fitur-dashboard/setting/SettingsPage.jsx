@@ -85,7 +85,7 @@ export default function SettingsPage() {
 
   return (
     <div className="settings-page">
-      <h1 className="settings-page__title">Account Settings</h1>
+      <h1 className="settings-page__title">Account & System Setting</h1>
 
       <div className="settings-page__container">
         {/* Sidebar Navigasi internal */}
@@ -107,6 +107,12 @@ export default function SettingsPage() {
             onClick={() => setActiveSubTab("security")}
           >
             Security
+          </button>
+          <button
+            className={`settings-nav-item ${activeSubTab === "system-status" ? "active" : ""}`}
+            onClick={() => setActiveSubTab("system-status")}
+          >
+            System Status
           </button>
         </aside>
 
@@ -316,6 +322,125 @@ export default function SettingsPage() {
                   >
                     Hapus akun Permanen
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SYSTEM STATUS SUB-TAB */}
+          {activeSubTab === "system-status" && (
+            <div className="settings-section sys-status-section">
+              {/* Header section with live badge */}
+              <div className="sys-status-header">
+                <h3 className="sys-status-title">PRODUCTION ENVIRONMENT & MONITORING</h3>
+                <span className="sys-live-badge">
+                  <span className="sys-live-dot"></span> Live System
+                </span>
+              </div>
+
+              {/* Environment info card */}
+              <div className="sys-env-card">
+                <div className="sys-env-row">
+                  <span className="sys-env-label">Public URL</span>
+                  <a href="https://video-editor.example.com" target="_blank" rel="noreferrer" className="sys-env-link">
+                    https://video-editor.example.com
+                  </a>
+                </div>
+                <div className="sys-env-row">
+                  <span className="sys-env-label">API URL</span>
+                  <a href="https://api.video-editor.example.com" target="_blank" rel="noreferrer" className="sys-env-link">
+                    https://api.video-editor.example.com
+                  </a>
+                </div>
+                <div className="sys-env-row">
+                  <span className="sys-env-label">Environment</span>
+                  <div className="sys-env-value-group">
+                    <span className="sys-env-env-text">PRODUCTION</span>
+                    <span className="sys-ssl-badge">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      SSL Active
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* System health & resources */}
+              <div className="sys-group">
+                <h3 className="sys-status-title">SYSTEM HEALTH & RESOURCES</h3>
+                <div className="sys-health-grid">
+                  <div className="sys-health-card">
+                    <div className="sys-health-header">
+                      <span className="sys-health-label">CPU Usage</span>
+                    </div>
+                    <div className="sys-progress-bar-bg">
+                      <div className="sys-progress-bar-fill" style={{ width: "20%" }}></div>
+                    </div>
+                    <span className="sys-health-value">20%</span>
+                  </div>
+
+                  <div className="sys-health-card">
+                    <div className="sys-health-header">
+                      <span className="sys-health-label">Memory Usage</span>
+                    </div>
+                    <div className="sys-progress-bar-bg">
+                      <div className="sys-progress-bar-fill" style={{ width: "45%" }}></div>
+                    </div>
+                    <span className="sys-health-value">45%</span>
+                  </div>
+
+                  <div className="sys-health-card">
+                    <div className="sys-health-header">
+                      <span className="sys-health-label">Storage Usage</span>
+                    </div>
+                    <div className="sys-progress-bar-bg">
+                      <div className="sys-progress-bar-fill" style={{ width: "30%" }}></div>
+                    </div>
+                    <span className="sys-health-value">30%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Production services status */}
+              <div className="sys-group">
+                <h3 className="sys-status-title">PRODUCTION SERVICES STATUS</h3>
+                <div className="sys-services-card">
+                  <div className="sys-service-row">
+                    <span className="sys-service-name">Frontend App</span>
+                    <span className="sys-service-status status-running">
+                      <span className="status-dot"></span> RUNNING <span className="status-subtext">(HTTP 200 OK)</span>
+                    </span>
+                  </div>
+
+                  <div className="sys-service-row">
+                    <span className="sys-service-name">Backend App</span>
+                    <span className="sys-service-status status-running">
+                      <span className="status-dot"></span> RUNNING <span className="status-subtext">(Port 433)</span>
+                    </span>
+                  </div>
+
+                  <div className="sys-service-row">
+                    <span className="sys-service-name">Database</span>
+                    <span className="sys-service-status status-connected">
+                      <span className="status-dot"></span> CONNECTED
+                    </span>
+                  </div>
+
+                  <div className="sys-service-row">
+                    <span className="sys-service-name">FFmpeg Engine</span>
+                    <span className="sys-service-status status-ready">
+                      <span className="status-dot"></span> READY
+                    </span>
+                  </div>
+
+                  <div className="sys-service-row">
+                    <span className="sys-service-name">Media Storage</span>
+                    <span className="sys-service-status status-connected">
+                      <span className="status-dot"></span> CONNECTED
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
