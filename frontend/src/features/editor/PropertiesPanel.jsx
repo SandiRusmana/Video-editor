@@ -34,7 +34,28 @@ const POSITIONS = [
   "Bottom Right",
 ];
 
-export default function PropertiesPanel({ clip, selectedTransition, onCloseTransition, onUpdateTrim, onUpdateProperties, onDeleteClip }) {
+const ALIGN_GRID = [
+  { name: "Top Left", icon: "↖" },
+  { name: "Top Center", icon: "↑" },
+  { name: "Top Right", icon: "↗" },
+  { name: "Center Left", icon: "←" },
+  { name: "Center", icon: "☉" },
+  { name: "Center Right", icon: "→" },
+  { name: "Bottom Left", icon: "↙" },
+  { name: "Bottom Center", icon: "↓" },
+  { name: "Bottom Right", icon: "↘" },
+];
+
+export default function PropertiesPanel({
+  clip,
+  selectedTransition,
+  onCloseTransition,
+  onSaveTransition,
+  onDeleteTransition,
+  onUpdateTrim,
+  onUpdateProperties,
+  onDeleteClip,
+}) {
   const [startInput, setStartInput] = useState("00:00");
   const [endInput, setEndInput] = useState("00:00");
 
@@ -55,6 +76,15 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
   const [volumeInput, setVolumeInput] = useState(1);
   const [mutedInput, setMutedInput] = useState(false);
 
+  const [transType, setTransType] = useState("Fade");
+  const [transDuration, setTransDuration] = useState(1.0);
+
+  useEffect(() => {
+    if (selectedTransition) {
+      setTransType(selectedTransition.type || "Fade");
+      setTransDuration(selectedTransition.duration || 1.0);
+    }
+  }, [selectedTransition]);
 
   useEffect(() => {
     if (clip) {
@@ -81,6 +111,26 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
     }
   }, [clip]);
 
+  const handleApplyTransition = () => {
+    if (onSaveTransition && selectedTransition) {
+      onSaveTransition({
+        id: selectedTransition.id,
+        leftClipId: selectedTransition.leftClip?.id,
+        rightClipId: selectedTransition.rightClip?.id,
+        type: transType,
+        duration: parseFloat(transDuration) || 1.0,
+      });
+    }
+    if (onCloseTransition) onCloseTransition();
+  };
+
+  const handleDeleteTransition = () => {
+    if (onDeleteTransition && selectedTransition?.id) {
+      onDeleteTransition(selectedTransition.id);
+    }
+    if (onCloseTransition) onCloseTransition();
+  };
+
   if (selectedTransition) {
     return (
       <aside className="properties-panel">
@@ -89,25 +139,50 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
         <div className="properties-panel__card">
           <div className="properties-panel__form-group">
             <label>Type</label>
-            <select className="properties-panel__select-full" defaultValue={selectedTransition.type}>
-              <option value="Fade">Fade</option>
-              <option value="Dissolve">Dissolve</option>
-              <option value="Wipe">Wipe</option>
+            <select
+              className="properties-panel__select-full"
+              value={transType}
+              onChange={(e) => setTransType(e.target.value)}
+            >
+              <option value="Fade">Fade (Pudar)</option>
+              <option value="Dissolve">Dissolve (Peleburan)</option>
+              <option value="Wipe">Wipe (Usap Horizontal)</option>
             </select>
           </div>
 
           <div className="properties-panel__form-group">
             <label>Duration</label>
             <div className="input-with-suffix">
-              <input type="number" step="0.1" defaultValue={selectedTransition.duration} />
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="5.0"
+                value={transDuration}
+                onChange={(e) => setTransDuration(e.target.value)}
+              />
               <span>s</span>
             </div>
           </div>
 
           <div className="properties-panel__form-group">
-            <label>Target</label>
-            <div className="media-name-badge">
-              <span className="media-text">Track {selectedTransition.trackId} Clips</span>
+            <label>Target Clips</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#c7d2fe' }}>
+                <span style={{ background: '#6366f1', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>1</span>
+                <span style={{ wordBreak: 'break-all', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1 }} title={selectedTransition.leftClip?.name}>
+                  {selectedTransition.leftClip?.name || "Klip Kiri"}
+                </span>
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '11px', color: '#818cf8', fontWeight: 'bold' }}>
+                ⬇️ Transisi ({transType})
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#c7d2fe' }}>
+                <span style={{ background: '#6366f1', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>2</span>
+                <span style={{ wordBreak: 'break-all', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1 }} title={selectedTransition.rightClip?.name}>
+                  {selectedTransition.rightClip?.name || "Klip Kanan"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -119,7 +194,7 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
               padding: '10px', marginTop: '8px', fontSize: '13px', 
               fontWeight: '600', display: 'flex', justifyContent: 'center', gap: '8px' 
             }}
-            onClick={onCloseTransition}
+            onClick={handleApplyTransition}
           >
              ↻ Apply Changes
           </button>
@@ -127,7 +202,7 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
           <button 
             type="button"
             className="btn-remove-overlay"
-            onClick={onCloseTransition}
+            onClick={handleDeleteTransition}
             style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}
           >
             🗑️ Delete Transition
@@ -201,7 +276,7 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
   }
 
   const commitScale = (e) => {
-    let val = parseInt(e.target.value, 10);
+    let val = parseFloat(e.target.value);
     if (isNaN(val)) val = 100;
     const decimalScale = val / 100;
     setScaleInput(decimalScale);
@@ -211,9 +286,9 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
   };
 
   const commitOpacity = (e) => {
-    let val = parseInt(e.target.value, 10);
+    let val = parseFloat(e.target.value);
     if (isNaN(val)) val = 100;
-    const decimalOpacity = val / 100;
+    const decimalOpacity = Math.max(0, Math.min(1, val / 100));
     setOpacityInput(decimalOpacity);
     if (onUpdateProperties) {
       onUpdateProperties(clip.id, { opacity: decimalOpacity });
@@ -221,7 +296,7 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
   };
 
   const commitRotation = (e) => {
-    let val = parseInt(e.target.value, 10);
+    let val = parseFloat(e.target.value);
     if (isNaN(val)) val = 0;
     setRotationInput(val);
     if (onUpdateProperties) {
@@ -345,6 +420,40 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
               ))}
             </select>
           </div>
+
+          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "12px" }}>
+            <div className="properties-panel__row">
+              <label>Waktu Mulai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={startInput}
+                onChange={(e) => setStartInput(e.target.value)}
+                onBlur={commitStart}
+                onKeyDown={(e) => e.key === "Enter" && commitStart()}
+              />
+            </div>
+
+            <div className="properties-panel__row">
+              <label>Waktu Selesai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={endInput}
+                onChange={(e) => setEndInput(e.target.value)}
+                onBlur={commitEnd}
+                onKeyDown={(e) => e.key === "Enter" && commitEnd()}
+              />
+            </div>
+          </div>
+
+          <button 
+            className="btn-remove-overlay"
+            style={{ marginTop: "12px" }}
+            onClick={() => onDeleteClip && onDeleteClip(clip.id)}
+          >
+            🗑️ Hapus Teks
+          </button>
         </div>
       </aside>
     );
@@ -371,7 +480,10 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
                 <input
                   type="number"
                   value={Math.round(scaleInput * 100)}
-                  onChange={(e) => setScaleInput(e.target.value / 100)}
+                  onChange={(e) => {
+                    setScaleInput(e.target.value / 100);
+                    commitScale(e);
+                  }}
                   onBlur={commitScale}
                   onKeyDown={(e) => e.key === "Enter" && commitScale(e)}
                 />
@@ -384,7 +496,10 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
                 <input
                   type="number"
                   value={Math.round(opacityInput * 100)}
-                  onChange={(e) => setOpacityInput(e.target.value / 100)}
+                  onChange={(e) => {
+                    setOpacityInput(e.target.value / 100);
+                    commitOpacity(e);
+                  }}
                   onBlur={commitOpacity}
                   onKeyDown={(e) => e.key === "Enter" && commitOpacity(e)}
                   min="0"
@@ -395,36 +510,121 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
             </div>
           </div>
 
-          <div className="properties-panel__row-split">
-            <div className="properties-panel__form-group">
-              <label>Position</label>
-              <select
-                className="properties-panel__select-full"
-                value={imagePositionInput}
-                onChange={commitImagePosition}
-              >
-                {POSITIONS.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
+          <div className="properties-panel__form-group">
+            <label>Rotation</label>
+            <div className="input-with-suffix">
+              <input
+                type="number"
+                value={rotationInput}
+                onChange={(e) => {
+                  setRotationInput(e.target.value);
+                  commitRotation(e);
+                }}
+                onBlur={commitRotation}
+                onKeyDown={(e) => e.key === "Enter" && commitRotation(e)}
+              />
+              <span>°</span>
             </div>
-            <div className="properties-panel__form-group">
-              <label>Rotation</label>
-              <div className="input-with-suffix">
-                <input
-                  type="number"
-                  value={rotationInput}
-                  onChange={(e) => setRotationInput(e.target.value)}
-                  onBlur={commitRotation}
-                  onKeyDown={(e) => e.key === "Enter" && commitRotation(e)}
-                />
-                <span>°</span>
+          </div>
+
+          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "12px" }}>
+            <span className="properties-panel__section-title">⊕ POSITION / COORDINATES</span>
+
+            <div className="properties-panel__form-group" style={{ marginTop: "8px" }}>
+              <label>x Position</label>
+              <input
+                type="number"
+                className="properties-panel__input-full"
+                value={posXInput}
+                onChange={(e) => {
+                  setPosXInput(e.target.value);
+                  const val = parseInt(e.target.value, 10) || 0;
+                  if (onUpdateProperties) onUpdateProperties(clip.id, { x: val });
+                }}
+                onBlur={commitPosX}
+              />
+            </div>
+
+            <div className="properties-panel__form-group" style={{ marginTop: "8px" }}>
+              <label>Y Position</label>
+              <input
+                type="number"
+                className="properties-panel__input-full"
+                value={posYInput}
+                onChange={(e) => {
+                  setPosYInput(e.target.value);
+                  const val = parseInt(e.target.value, 10) || 0;
+                  if (onUpdateProperties) onUpdateProperties(clip.id, { y: val });
+                }}
+                onBlur={commitPosY}
+              />
+            </div>
+
+            <div className="properties-panel__form-group" style={{ marginTop: "10px" }}>
+              <label>Align</label>
+              <div className="align-grid">
+                {ALIGN_GRID.map((pos) => {
+                  const isActive = imagePositionInput === pos.name;
+                  return (
+                    <button
+                      key={pos.name}
+                      type="button"
+                      className={`align-grid__btn ${isActive ? "align-grid__btn--active" : ""}`}
+                      title={pos.name}
+                      onClick={() => {
+                        setImagePositionInput(pos.name);
+                        setPosXInput(0);
+                        setPosYInput(0);
+                        if (onUpdateProperties) {
+                          onUpdateProperties(clip.id, { textPosition: pos.name, x: 0, y: 0 });
+                        }
+                      }}
+                    >
+                      {pos.icon}
+                    </button>
+                  );
+                })}
               </div>
+
+              <button
+                type="button"
+                className="btn-reset-center"
+                onClick={resetPosition}
+              >
+                ☉ Reset to Center
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "12px" }}>
+            <div className="properties-panel__row">
+              <label>Waktu Mulai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={startInput}
+                onChange={(e) => setStartInput(e.target.value)}
+                onBlur={commitStart}
+                onKeyDown={(e) => e.key === "Enter" && commitStart()}
+              />
+            </div>
+
+            <div className="properties-panel__row">
+              <label>Waktu Selesai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={endInput}
+                onChange={(e) => setEndInput(e.target.value)}
+                onBlur={commitEnd}
+                onKeyDown={(e) => e.key === "Enter" && commitEnd()}
+              />
             </div>
           </div>
 
           <button 
             className="btn-remove-overlay"
+            style={{ marginTop: "12px" }}
             onClick={() => onDeleteClip && onDeleteClip(clip.id)}
           >
             🗑️ Remove Overlay
@@ -490,16 +690,40 @@ export default function PropertiesPanel({ clip, selectedTransition, onCloseTrans
             </button>
           </div>
 
-          <div className="properties-panel__form-group">
-            <label>Trim</label>
-            <div className="trim-display-box" style={{
-                background: '#1a1f35', border: '1px solid #2a2f4c',
-                padding: '10px', borderRadius: '4px', color: '#e2e8f0',
-                fontSize: '14px', fontWeight: '500'
-            }}>
-              {Math.floor(clip.trimStart)}s-{Math.floor(clip.trimEnd)}s
+          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "12px" }}>
+            <span className="properties-panel__section-title">✂️ TIMING / TRIM</span>
+            <div className="properties-panel__row" style={{ marginTop: "8px" }}>
+              <label>Waktu Mulai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={startInput}
+                onChange={(e) => setStartInput(e.target.value)}
+                onBlur={commitStart}
+                onKeyDown={(e) => e.key === "Enter" && commitStart()}
+              />
+            </div>
+
+            <div className="properties-panel__row" style={{ marginTop: "6px" }}>
+              <label>Waktu Selesai</label>
+              <input
+                type="text"
+                className="time-input"
+                value={endInput}
+                onChange={(e) => setEndInput(e.target.value)}
+                onBlur={commitEnd}
+                onKeyDown={(e) => e.key === "Enter" && commitEnd()}
+              />
             </div>
           </div>
+
+          <button 
+            className="btn-remove-overlay"
+            style={{ marginTop: "12px" }}
+            onClick={() => onDeleteClip && onDeleteClip(clip.id)}
+          >
+            🗑️ Hapus Audio
+          </button>
         </div>
       </aside>
     );

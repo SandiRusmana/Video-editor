@@ -514,7 +514,13 @@
   background: #6366f1;
   transform: translate(-50%, -50%) scale(1.1);
 }
-.timeline-editor__transition-btn--selected {
+.timeline-editor__transition-btn--active {
   background: #6366f1;
-  box-shadow: 0 0 0 2px #fff, 0 0 8px #6366f1;
+  border-color: #818cf8;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.8);
+}
+.timeline-editor__transition-btn--selected {
+  background: #4f46e5;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px #fff, 0 0 12px #6366f1;
 }

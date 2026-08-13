@@ -96,6 +96,8 @@
   border-radius: 8px;
   padding: 8px;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .media-item:hover {

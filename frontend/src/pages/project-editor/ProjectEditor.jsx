@@ -79,10 +79,18 @@ function ProjectEditorInner({
     reorderClip,
     deleteClip,
     splitClipAt,
+    transitions,
+    saveTransition,
+    updateTransition,
+    deleteTransition,
     currentTime,
     setCurrentTime,
     isPlaying,
     setIsPlaying,
+    isSaving,
+    saveStatus,
+    retryAutoSave,
+    autoSaveProjectMetadata,
     toastMessage,
   } = useEditorState(projectId);
 
@@ -95,8 +103,33 @@ function ProjectEditorInner({
   };
 
   const handleSelectTransition = (transition) => {
-    setSelectedTransition(transition);
+    // Check if this transition exists in backend transitions
+    const existing = transitions.find(
+      (t) => t.leftClipId === transition.leftClip?.id && t.rightClipId === transition.rightClip?.id
+    );
+    setSelectedTransition({
+      ...transition,
+      id: existing?.id || transition.id,
+      type: existing?.type || transition.type || "Fade",
+      duration: existing?.duration || transition.duration || 1.0,
+    });
     deselectClip();
+  };
+
+  const handleSaveTransition = async ({ id, leftClipId, rightClipId, type, duration }) => {
+    if (id) {
+      await updateTransition(id, { type, duration });
+    } else if (leftClipId && rightClipId) {
+      await saveTransition({ leftClipId, rightClipId, type, duration });
+    }
+    setSelectedTransition(null);
+  };
+
+  const handleDeleteTransition = async (transitionId) => {
+    if (transitionId) {
+      await deleteTransition(transitionId);
+    }
+    setSelectedTransition(null);
   };
 
   const handleDeselectAll = () => {
@@ -112,14 +145,6 @@ function ProjectEditorInner({
   const [showExportModal, setShowExportModal] = useState(false);
   const isSeeking = useRef(false);
   const [seekGeneration, setSeekGeneration] = useState(0);
-  const [saveStatus, setSaveStatus] = useState("Saved");
-
-  useEffect(() => {
-    if (timelineLoading) return;
-    setSaveStatus("Saving...");
-    const t = setTimeout(() => setSaveStatus("Saved"), 1000);
-    return () => clearTimeout(t);
-  }, [clips, tracks, projectName, timelineLoading]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -154,27 +179,42 @@ function ProjectEditorInner({
     const previousName = projectName;
     setProjectName(trimmed);
 
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:3000/projects/${projectId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ name: trimmed }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || `Gagal menyimpan nama (${res.status})`);
-    } catch (err) {
-      alert(err.message || "Gagal mengubah nama project");
+    const success = await autoSaveProjectMetadata({ name: trimmed });
+    if (!success) {
       setProjectName(previousName);
     }
   };
 
-  const handleDropMedia = (mediaId, targetTrackId) => {
-    const media = mediaLibrary.find((m) => m.id === mediaId);
-    if (media) addClipToTimeline(media, targetTrackId);
+  const handleDropMedia = (mediaId, targetTrackId, timelineStart) => {
+    if (!mediaId) return;
+
+    const media = mediaLibrary.find(
+      (m) => String(m.id) === String(mediaId) || m.name === mediaId
+    ) || { id: mediaId, type: "VIDEO" };
+
+    const targetTrack = tracks.find((t) => t.id === targetTrackId);
+    let validTrackId = targetTrackId;
+
+    if (media.type) {
+      const typeUpper = (media.type || "").toUpperCase();
+      const isImage = typeUpper === "IMAGE";
+      const isVideo = typeUpper === "VIDEO";
+      const isAudio = typeUpper === "AUDIO";
+
+      if (isImage) {
+        // Untuk Image Overlay: utamakan Video Track 2 (Upper Track). Jika belum ada, kirim undefined agar backend buatkan Video Track 2
+        const videoTracks = tracks.filter((t) => t.type === "VIDEO");
+        validTrackId = videoTracks[1] ? videoTracks[1].id : undefined;
+      } else if (isVideo && targetTrack && targetTrack.type !== "VIDEO") {
+        const videoTrack = tracks.find((t) => t.type === "VIDEO");
+        validTrackId = videoTrack ? videoTrack.id : undefined;
+      } else if (isAudio && targetTrack && targetTrack.type !== "AUDIO") {
+        const audioTrack = tracks.find((t) => t.type === "AUDIO");
+        validTrackId = audioTrack ? audioTrack.id : undefined;
+      }
+    }
+
+    addClipToTimeline(media, validTrackId, timelineStart);
   };
 
   const handleSeekStart = () => {
@@ -198,6 +238,17 @@ function ProjectEditorInner({
 
   const cancelLogout = () => {
     setShowLogoutConfirm(false);
+  };
+
+  const handleAddMediaFromLibrary = (media) => {
+    const isImage = (media.type || "").toUpperCase() === "IMAGE";
+    if (isImage) {
+      // Untuk Image Overlay: utamakan Video Track 2 (upper track). Jika belum ada, kirim undefined agar backend otomatis buat Video Track 2
+      const upperVideoTrack = tracks.filter((t) => t.type === "VIDEO")[1];
+      addClipToTimeline(media, upperVideoTrack?.id);
+    } else {
+      addClipToTimeline(media);
+    }
   };
 
   return (
@@ -231,8 +282,29 @@ function ProjectEditorInner({
               >
                 ✎
               </button>
-              <span className={`save-status ${saveStatus === "Saved" ? "saved" : "saving"}`}>
-                {saveStatus === "Saved" ? "✓ Saved" : "Saving..."}
+              <span
+                className={`project-editor__save-status ${
+                  saveStatus === "Saving..."
+                    ? "project-editor__save-status--saving"
+                    : saveStatus === "Failed"
+                    ? "project-editor__save-status--failed"
+                    : saveStatus === "Retry Saving..."
+                    ? "project-editor__save-status--retrying"
+                    : "project-editor__save-status--saved"
+                }`}
+                onClick={() => {
+                  if (saveStatus === "Failed") retryAutoSave();
+                }}
+                title={
+                  saveStatus === "Failed"
+                    ? "Auto Save Gagal - Klik untuk menyimpan ulang"
+                    : "Status Auto Save Project"
+                }
+              >
+                {saveStatus === "Saving..." && "⏳ Saving..."}
+                {saveStatus === "Saved" && "✓ Saved"}
+                {saveStatus === "Failed" && "❌ Failed"}
+                {saveStatus === "Retry Saving..." && "🔄 Retry Saving..."}
               </span>
             </span>
           )}
@@ -260,7 +332,7 @@ function ProjectEditorInner({
       <div className="project-editor__body">
         <MediaLibrary
           mediaList={mediaLibrary}
-          onAddToTimeline={addClipToTimeline}
+          onAddToTimeline={handleAddMediaFromLibrary}
           onUploadMedia={uploadMedia}
           onDeleteMedia={deleteMedia}
         />
@@ -271,13 +343,19 @@ function ProjectEditorInner({
           onTogglePlay={() => setIsPlaying((p) => !p)}
           onSeek={setCurrentTime}
           clips={clips}
+          transitions={transitions}
           isSeeking={isSeeking}
           seekGeneration={seekGeneration}
+          selectedClipId={selectedClip?.id}
+          onSelectClip={selectClip}
+          onUpdateProperties={updateClipProperties}
           selectedTransition={selectedTransition}
         />
         <PropertiesPanel
           clip={selectedClip}
           selectedTransition={selectedTransition}
+          onSaveTransition={handleSaveTransition}
+          onDeleteTransition={handleDeleteTransition}
           onUpdateTrim={updateClipTrim}
           onUpdateProperties={updateClipProperties}
           onDeleteClip={deleteClip}
@@ -288,6 +366,7 @@ function ProjectEditorInner({
       <TimelineEditor
         tracks={tracks}
         clips={clips}
+        transitions={transitions}
         timelineLoading={timelineLoading}
         totalDuration={totalDuration}
         selectedClipId={selectedClip?.id}

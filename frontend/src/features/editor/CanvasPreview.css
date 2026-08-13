@@ -27,7 +27,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 180px;
+  min-height: 0;
   min-width: 0;
   padding: 4px;
   position: relative;
@@ -134,8 +134,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  margin-top: 10px;
+  padding: 6px 14px;
+  margin-top: 6px;
   background: #111326;
   border: 1px solid #23274c;
   border-radius: 12px;

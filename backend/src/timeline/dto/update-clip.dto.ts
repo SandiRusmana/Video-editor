@@ -62,6 +62,14 @@ export class UpdateClipDto {
 
   @IsOptional()
   @IsString()
+  fontFamily?: string;
+
+  @IsOptional()
+  @IsString()
+  textPosition?: string;
+
+  @IsOptional()
+  @IsString()
   filter?: string;
 
   @IsOptional()

@@ -4,6 +4,7 @@ import Login from "./fitur/login/login.jsx";
 import Register from "./fitur/register/register.jsx";
 import Dashboard from "./fitur/fitur-dashboard/dashboard.jsx";
 import ProjectEditor from "./pages/project-editor/ProjectEditor.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 
 function App() {
   const [halaman, setHalaman] = useState("landing");
@@ -105,15 +106,17 @@ function App() {
 
       {/* 5. Kondisi pas tampil halaman Project Editor */}
       {halaman === "editor" && (
-        <ProjectEditor
-          projectId={selectedProjectId}
-          initialProjectName={selectedProjectName}
-          onKembaliKeDashboard={() => setHalaman("dashboard")}
-          onLogout={() => {
-            localStorage.removeItem("token");
-            setHalaman("landing");
-          }}
-        />
+        <ErrorBoundary>
+          <ProjectEditor
+            projectId={selectedProjectId}
+            initialProjectName={selectedProjectName}
+            onKembaliKeDashboard={() => setHalaman("dashboard")}
+            onLogout={() => {
+              localStorage.removeItem("token");
+              setHalaman("landing");
+            }}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );

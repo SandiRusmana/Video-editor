@@ -38,6 +38,7 @@ model Project {
   media       Media[]
   tracks      Track[]
   exports     ExportJob[]
+  transitions Transition[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -68,7 +69,7 @@ model Media {
 }
 
 // ---------------------------------------------------------------
-// TIMELINE: Track -> Clip
+// TIMELINE: Track -> Clip -> Transition
 // ---------------------------------------------------------------
 enum TrackType {
   VIDEO
@@ -77,13 +78,14 @@ enum TrackType {
 }
 
 model Track {
-  id        String    @id @default(uuid())
-  projectId String
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type      TrackType
-  name      String?
-  order     Int       @default(0)   // urutan trek dari atas ke bawah
-  clips     Clip[]
+  id          String       @id @default(uuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        TrackType
+  name        String?
+  order       Int          @default(0)   // urutan trek dari atas ke bawah
+  clips       Clip[]
+  transitions Transition[]
 }
 
 model Clip {
@@ -117,14 +119,38 @@ model Clip {
   textContent String?
   fontSize    Int?
   fontColor   String?
+  fontFamily  String?
+  textPosition String?
 
   // efek
   filter      String?   // nama filter, mis. "grayscale", "sepia"
   transitionIn  String?
   transitionOut String?
 
+  leftTransitions  Transition[] @relation("LeftClipTransitions")
+  rightTransitions Transition[] @relation("RightClipTransitions")
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model Transition {
+  id           String   @id @default(uuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trackId      String
+  track        Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  leftClipId   String
+  leftClip     Clip     @relation("LeftClipTransitions", fields: [leftClipId], references: [id], onDelete: Cascade)
+  rightClipId  String
+  rightClip    Clip     @relation("RightClipTransitions", fields: [rightClipId], references: [id], onDelete: Cascade)
+  type         String   @default("Fade")
+  duration     Float    @default(1.0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([leftClipId, rightClipId])
 }
 
 // ---------------------------------------------------------------

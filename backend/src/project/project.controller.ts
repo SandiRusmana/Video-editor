@@ -29,6 +29,11 @@ export class ProjectController {
     return this.projectService.update(req.user.userId, id, dto);
   }
 
+  @Patch(':id/auto-save')
+  autoSave(@Req() req, @Param('id') id: string, @Body() dto: UpdateProjectDto) {
+    return this.projectService.autoSave(req.user.userId, id, dto);
+  }
+
   @Delete(':id')
   remove(@Req() req, @Param('id') id: string) {
     return this.projectService.remove(req.user.userId, id);

@@ -48,6 +48,31 @@ export class TimelineService {
     });
   }
 
+  private async getOrCreateUpperVideoTrack(projectId: string) {
+    const videoTracks = await this.prisma.track.findMany({
+      where: { projectId, type: TrackType.VIDEO },
+      orderBy: { order: 'asc' },
+    });
+
+    if (videoTracks.length >= 2) {
+      return videoTracks[1]; // Video Track 2 (Upper Overlay Track)
+    }
+
+    if (videoTracks.length === 1) {
+      const trackCount = await this.prisma.track.count({ where: { projectId } });
+      return this.prisma.track.create({
+        data: {
+          projectId,
+          type: TrackType.VIDEO,
+          name: 'Video Track 2',
+          order: trackCount,
+        },
+      });
+    }
+
+    return this.getOrCreateTrack(projectId, TrackType.VIDEO);
+  }
+
   async createTrack(userId: string, projectId: string, dto: CreateTrackDto) {
     await this.assertProjectOwnership(userId, projectId);
     const trackCount = await this.prisma.track.count({ where: { projectId } });
@@ -108,6 +133,12 @@ export class TimelineService {
             },
           },
         },
+        transitions: {
+          include: {
+            leftClip: { select: { id: true, timelineStart: true, inPoint: true, outPoint: true } },
+            rightClip: { select: { id: true, timelineStart: true, inPoint: true, outPoint: true } },
+          },
+        },
       },
     });
   }
@@ -141,8 +172,12 @@ export class TimelineService {
     } else if (dto.trackType) {
       track = await this.getOrCreateTrack(projectId, dto.trackType);
     } else if (media) {
-      const trackType = this.mapMediaTypeToTrackType(media.type);
-      track = await this.getOrCreateTrack(projectId, trackType);
+      if (media.type === 'IMAGE') {
+        track = await this.getOrCreateUpperVideoTrack(projectId);
+      } else {
+        const trackType = this.mapMediaTypeToTrackType(media.type);
+        track = await this.getOrCreateTrack(projectId, trackType);
+      }
     } else {
       // Text Clip
       track = await this.getOrCreateTrack(projectId, TrackType.TEXT);
@@ -169,6 +204,8 @@ export class TimelineService {
         textContent: dto.textContent ?? null,
         fontSize: dto.fontSize ?? (dto.textContent ? 36 : null),
         fontColor: dto.fontColor ?? (dto.textContent ? '#ffffff' : null),
+        fontFamily: dto.fontFamily ?? (dto.textContent ? 'Poppins' : null),
+        textPosition: dto.textPosition ?? (dto.textContent ? 'Bottom Center' : null),
       },
       include: {
         track: true,
@@ -257,6 +294,8 @@ export class TimelineService {
         textContent: clip.textContent,
         fontSize: clip.fontSize,
         fontColor: clip.fontColor,
+        fontFamily: clip.fontFamily,
+        textPosition: clip.textPosition,
         filter: clip.filter,
       },
       include: {
@@ -288,9 +327,10 @@ export class TimelineService {
       throw new BadRequestException('Titik awal (start time) tidak boleh lebih besar atau sama dengan titik akhir (end time)');
     }
 
-    const duration = clip.media?.duration ?? DEFAULT_IMAGE_DURATION;
-    if (outPoint > duration) {
-      throw new BadRequestException('Nilai trim tidak boleh melebihi durasi media asli');
+    if (clip.media && clip.media.duration != null && (clip.media.type === 'VIDEO' || clip.media.type === 'AUDIO')) {
+      if (outPoint > clip.media.duration) {
+        throw new BadRequestException('Nilai trim tidak boleh melebihi durasi media asli');
+      }
     }
     
     if (inPoint < 0) {
@@ -387,5 +427,103 @@ export class TimelineService {
       updatedClips.push(clip);
     }
     return updatedClips;
+  }
+
+  // Transitions: Create / Upsert Transition
+  async saveTransition(
+    userId: string,
+    projectId: string,
+    dto: { leftClipId: string; rightClipId: string; type?: string; duration?: number },
+  ) {
+    await this.assertProjectOwnership(userId, projectId);
+
+    const leftClip = await this.prisma.clip.findUnique({
+      where: { id: dto.leftClipId },
+      include: { track: true },
+    });
+    const rightClip = await this.prisma.clip.findUnique({
+      where: { id: dto.rightClipId },
+      include: { track: true },
+    });
+
+    if (!leftClip || !rightClip) {
+      throw new NotFoundException('Klip awal atau klip akhir tidak ditemukan');
+    }
+    if (leftClip.trackId !== rightClip.trackId) {
+      throw new BadRequestException('Transisi hanya dapat ditambahkan di antara dua klip pada track yang sama');
+    }
+
+    const type = dto.type ?? 'Fade';
+    const duration = dto.duration ?? 1.0;
+
+    return this.prisma.transition.upsert({
+      where: {
+        leftClipId_rightClipId: {
+          leftClipId: dto.leftClipId,
+          rightClipId: dto.rightClipId,
+        },
+      },
+      update: {
+        type,
+        duration,
+      },
+      create: {
+        projectId,
+        trackId: leftClip.trackId,
+        leftClipId: dto.leftClipId,
+        rightClipId: dto.rightClipId,
+        type,
+        duration,
+      },
+      include: {
+        leftClip: { select: { id: true, timelineStart: true, inPoint: true, outPoint: true } },
+        rightClip: { select: { id: true, timelineStart: true, inPoint: true, outPoint: true } },
+      },
+    });
+  }
+
+  // Transitions: Update Transition
+  async updateTransition(
+    userId: string,
+    projectId: string,
+    transitionId: string,
+    dto: { type?: string; duration?: number },
+  ) {
+    await this.assertProjectOwnership(userId, projectId);
+
+    const transition = await this.prisma.transition.findUnique({
+      where: { id: transitionId },
+    });
+    if (!transition) throw new NotFoundException('Transisi tidak ditemukan');
+    if (transition.projectId !== projectId) {
+      throw new ForbiddenException('Transisi bukan bagian dari project ini');
+    }
+
+    return this.prisma.transition.update({
+      where: { id: transitionId },
+      data: {
+        ...(dto.type ? { type: dto.type } : {}),
+        ...(dto.duration !== undefined ? { duration: dto.duration } : {}),
+      },
+      include: {
+        leftClip: { select: { id: true, timelineStart: true, inPoint: true, outPoint: true } },
+        rightClip: { select: { id: true, timelineStart: true, inPoint: true, outPoint: true } },
+      },
+    });
+  }
+
+  // Transitions: Delete Transition
+  async deleteTransition(userId: string, projectId: string, transitionId: string) {
+    await this.assertProjectOwnership(userId, projectId);
+
+    const transition = await this.prisma.transition.findUnique({
+      where: { id: transitionId },
+    });
+    if (!transition) throw new NotFoundException('Transisi tidak ditemukan');
+    if (transition.projectId !== projectId) {
+      throw new ForbiddenException('Transisi bukan bagian dari project ini');
+    }
+
+    return this.prisma.transition.delete({ where: { id: transitionId } });
   }
 }

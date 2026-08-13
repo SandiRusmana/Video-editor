@@ -60,8 +60,10 @@ export default function MediaLibrary({ mediaList, onAddToTimeline, onUploadMedia
               className="media-item"
               draggable
               onDragStart={(e) => {
-                e.dataTransfer.setData("mediaId", media.id);
-                e.dataTransfer.effectAllowed = "copy";
+                const idStr = String(media.id);
+                e.dataTransfer.setData("mediaId", idStr);
+                e.dataTransfer.setData("text/plain", "media:" + idStr);
+                e.dataTransfer.effectAllowed = "copyMove";
               }}
             >
               <div className={`media-item__thumb media-item__thumb--${media.type}`}>

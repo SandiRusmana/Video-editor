@@ -58,4 +58,35 @@ export class TimelineController {
   deleteClip(@Req() req, @Param('projectId') projectId: string, @Param('clipId') clipId: string) {
     return this.timelineService.deleteClip(req.user.userId, projectId, clipId);
   }
+
+  // POST /projects/:projectId/timeline/transitions
+  @Post('timeline/transitions')
+  saveTransition(
+    @Req() req,
+    @Param('projectId') projectId: string,
+    @Body() dto: { leftClipId: string; rightClipId: string; type?: string; duration?: number },
+  ) {
+    return this.timelineService.saveTransition(req.user.userId, projectId, dto);
+  }
+
+  // PATCH /projects/:projectId/timeline/transitions/:transitionId
+  @Patch('timeline/transitions/:transitionId')
+  updateTransition(
+    @Req() req,
+    @Param('projectId') projectId: string,
+    @Param('transitionId') transitionId: string,
+    @Body() dto: { type?: string; duration?: number },
+  ) {
+    return this.timelineService.updateTransition(req.user.userId, projectId, transitionId, dto);
+  }
+
+  // DELETE /projects/:projectId/timeline/transitions/:transitionId
+  @Delete('timeline/transitions/:transitionId')
+  deleteTransition(
+    @Req() req,
+    @Param('projectId') projectId: string,
+    @Param('transitionId') transitionId: string,
+  ) {
+    return this.timelineService.deleteTransition(req.user.userId, projectId, transitionId);
+  }
 }

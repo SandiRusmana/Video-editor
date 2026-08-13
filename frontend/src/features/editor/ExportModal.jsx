@@ -19,11 +19,10 @@ export default function ExportModal({
   const [step, setStep] = useState("config");
   const [resolution, setResolution] = useState("1080p");
   const [format, setFormat] = useState("MP4");
+  const [errorMessage, setErrorMessage] = useState("");
   const [progress, setProgress] = useState(0);
-  const [simulateError, setSimulateError] = useState(false);
   const currentRecordRef = useRef(null);
 
-  // Calculate estimated file size based on resolution and duration
   const getEstSize = (res, durationSec) => {
     const dur = durationSec > 0 ? durationSec : 20;
     const baseMbPerMin = res === "1080p" ? 150 : 80;
@@ -45,119 +44,86 @@ export default function ExportModal({
     if (isOpen) {
       setStep("config");
       setProgress(0);
+      setErrorMessage("");
       currentRecordRef.current = null;
     }
   }, [isOpen]);
 
-  // Handle Export process simulation & record saving
-  useEffect(() => {
-    let interval = null;
-    if (step === "exporting") {
-      setProgress(0);
-      const startTime = Date.now();
-      const exportDuration = 3500; // 3.5 seconds total simulation
-
-      const fileName = `${projectName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.${format.toLowerCase()}`;
-
-      // Create new export record if not created yet
-      if (!currentRecordRef.current) {
-        const record = addExportRecord({
-          projectId,
-          projectName,
-          fileName,
-          resolution,
-          format,
-          sizeMb: currentEstSize,
-          status: "Rendering",
-          progress: 0,
-          editingData: {
-            totalDuration,
-            tracksCount: tracks ? tracks.length : 0,
-            clipsCount: clips ? clips.length : 0,
-            clips: (clips || []).map((c) => ({
-              id: c.id,
-              name: c.name,
-              type: c.type,
-              trimStart: c.trimStart,
-              trimEnd: c.trimEnd,
-              timelineStart: c.timelineStart,
-              volume: c.volume,
-              muted: c.muted,
-              scale: c.scale,
-              rotation: c.rotation,
-              opacity: c.opacity,
-            })),
-          },
-        });
-        currentRecordRef.current = record;
-      }
-
-      interval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const currentProgress = Math.min(100, Math.floor((elapsed / exportDuration) * 100));
-        setProgress(currentProgress);
-
-        if (currentRecordRef.current) {
-          updateExportRecord(currentRecordRef.current.id, {
-            progress: currentProgress,
-          });
-        }
-
-        if (currentProgress >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            if (simulateError) {
-              if (currentRecordRef.current) {
-                updateExportRecord(currentRecordRef.current.id, {
-                  status: "Failed",
-                  progress: 0,
-                  sizeMb: 0,
-                  errorMessage: "FFmpeg Rendering Error",
-                });
-              }
-              setStep("failed");
-            } else {
-              if (currentRecordRef.current) {
-                updateExportRecord(currentRecordRef.current.id, {
-                  status: "Done",
-                  progress: 100,
-                  sizeMb: currentEstSize,
-                  errorMessage: null,
-                });
-              }
-              setStep("success");
-            }
-          }, 300);
-        }
-      }, 50);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [step, simulateError, projectId, projectName, format, resolution, currentEstSize, totalDuration, clips, tracks]);
-
   if (!isOpen) return null;
 
-  const handleStartExport = () => {
+  const handleStartExport = async () => {
     setStep("exporting");
+    setProgress(5);
+    setErrorMessage("");
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:3000/projects/${projectId}/export`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          resolution,
+          format: format.toLowerCase(),
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.message || "Gagal memulai ekspor video");
+      }
+
+      currentRecordRef.current = data;
+      const jobId = data.id;
+
+      // Poll status every 800ms
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`http://localhost:3000/projects/${projectId}/export/${jobId}/status`, {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          const statusData = await statusRes.json().catch(() => null);
+
+          if (statusData) {
+            setProgress(statusData.progress || 10);
+            if (statusData.status === "DONE") {
+              clearInterval(pollInterval);
+              currentRecordRef.current = statusData;
+              setStep("success");
+            } else if (statusData.status === "FAILED") {
+              clearInterval(pollInterval);
+              setErrorMessage(statusData.errorMsg || "Proses rendering FFmpeg gagal.");
+              setStep("failed");
+            }
+          }
+        } catch (err) {
+          console.error("Error polling export status:", err);
+        }
+      }, 800);
+    } catch (err) {
+      setErrorMessage(err.message || "Proses ekspor gagal");
+      setStep("failed");
+    }
   };
 
   const handleRetry = () => {
-    setStep("exporting");
+    handleStartExport();
   };
 
   const handleDownload = () => {
-    if (currentRecordRef.current) {
-      downloadExportedFile(currentRecordRef.current);
-    } else {
-      downloadExportedFile({
-        projectName,
-        fileName: `${projectName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.${format.toLowerCase()}`,
-        resolution,
-        format,
-        sizeDisplay: `${currentEstSize} MB`,
-        status: "Done",
-      });
+    const job = currentRecordRef.current;
+    if (job?.id) {
+      const downloadApiUrl = `http://localhost:3000/export/download/${job.id}`;
+      const link = document.createElement("a");
+      link.href = downloadApiUrl;
+      link.setAttribute("download", `${projectName || "video"}.mp4`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -237,18 +203,7 @@ export default function ExportModal({
                 <span className="export-modal__size-val">~{currentEstSize} MB</span>
               </div>
 
-              {/* Dev/Testing mode option to simulate error */}
-              <div className="export-modal__test-option">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={simulateError}
-                    onChange={(e) => setSimulateError(e.target.checked)}
-                  />
-                  <span>Simulasi Error (Test UI Gagal)</span>
-                </label>
               </div>
-            </div>
 
             <div className="export-modal__actions">
               <button
@@ -370,8 +325,8 @@ export default function ExportModal({
             <div className="export-modal__body">
               <label className="export-modal__label">Reason</label>
               <div className="export-modal__error-box">
-                <p className="export-modal__error-title">FFmpeg Rendering Error</p>
-                <p className="export-modal__error-desc">(Timeout/Corrupt File)</p>
+                <p className="export-modal__error-title">FFmpeg Error</p>
+                <p className="export-modal__error-desc">{errorMessage || "Proses rendering FFmpeg gagal."}</p>
               </div>
 
               <div className="export-modal__status export-modal__status--failed">

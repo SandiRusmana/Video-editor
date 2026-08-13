@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState, useEffect } from "react";
+import React, { useRef, useCallback, useState, useEffect, Fragment } from "react";
 import { PIXELS_PER_SECOND } from "./useEditorState";
 import "./TimelineEditor.css";
 
@@ -126,7 +126,9 @@ function Clip({ clip, isSelected, onSelect, onTrim, onDelete, onUpdateText }) {
       style={{ left: clip.left, width: clip.width }}
       draggable={!isEditing}
       onDragStart={(e) => {
-        e.dataTransfer.setData("clipId", clip.id);
+        const idStr = String(clip.id);
+        e.dataTransfer.setData("clipId", idStr);
+        e.dataTransfer.setData("text/plain", "clip:" + idStr);
         e.dataTransfer.setData("sourceTrackId", clip.trackId);
         e.dataTransfer.effectAllowed = "move";
       }}
@@ -191,6 +193,7 @@ function Clip({ clip, isSelected, onSelect, onTrim, onDelete, onUpdateText }) {
 export default function TimelineEditor({
   tracks = [],
   clips = [],
+  transitions = [],
   timelineLoading = false,
   totalDuration = 0,
   selectedClipId = null,
@@ -286,7 +289,6 @@ export default function TimelineEditor({
 
   const handleDragOver = (e, trackId) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
     setDragOverTrackId(trackId);
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -307,21 +309,47 @@ export default function TimelineEditor({
 
     const rect = e.currentTarget.getBoundingClientRect();
     const dropX = Math.max(0, e.clientX - rect.left);
-    const dropTimelineStart = dropX / PIXELS_PER_SECOND;
+    let rawStart = dropX / PIXELS_PER_SECOND;
 
-    const clipId = e.dataTransfer.getData("clipId");
-    if (clipId) {
-      if (onMoveClipToTrack) {
+    // Smart Snapping untuk menghilangkan celah (gap) antar-klip
+    let dropTimelineStart = rawStart;
+    const threshold = 1.0; // toleransi snap (1 detik)
+
+    if (Math.abs(dropTimelineStart) < threshold) {
+      dropTimelineStart = 0;
+    }
+
+    const targetClips = clips.filter((c) => c.trackId === targetTrack.id);
+    for (const c of targetClips) {
+      const clipEnd = c.timelineStart + (c.duration || (c.trimEnd - c.trimStart));
+      if (Math.abs(rawStart - clipEnd) < threshold) {
+        dropTimelineStart = clipEnd; // Nempet di ujung klip sebelumnya
+        break;
+      }
+      if (Math.abs(rawStart - c.timelineStart) < threshold) {
+        dropTimelineStart = c.timelineStart;
+        break;
+      }
+    }
+
+    const textData = e.dataTransfer.getData("text/plain") || "";
+    const clipIdData = e.dataTransfer.getData("clipId");
+    const mediaIdData = e.dataTransfer.getData("mediaId");
+
+    if (clipIdData || textData.startsWith("clip:")) {
+      const clipId = clipIdData || textData.replace("clip:", "");
+      if (clipId && onMoveClipToTrack) {
         onMoveClipToTrack(clipId, targetTrack.id, dropTimelineStart);
       }
       return;
     }
 
-    const mediaId = e.dataTransfer.getData("mediaId");
-    if (mediaId) {
-      if (onDropMedia) {
-        onDropMedia(mediaId, targetTrack.id);
+    if (mediaIdData || textData.startsWith("media:")) {
+      const mediaId = mediaIdData || textData.replace("media:", "");
+      if (mediaId && onDropMedia) {
+        onDropMedia(mediaId, targetTrack.id, dropTimelineStart);
       }
+      return;
     }
   };
 
@@ -469,10 +497,17 @@ export default function TimelineEditor({
                         )}
 
                         {trackClips.map((clip, index) => {
+                          const clipDur = clip.duration ?? ((clip.trimEnd ?? 0) - (clip.trimStart ?? 0));
                           const nextClip = trackClips[index + 1];
-                          const isAdjacent = nextClip && Math.abs(nextClip.timelineStart - (clip.timelineStart + clip.duration)) < 0.1;
+                          const nextClipStart = nextClip?.timelineStart ?? 0;
+                          const isAdjacent = nextClip && Math.abs(nextClipStart - (clip.timelineStart + clipDur)) < 0.1;
+                          const activeTrans = isAdjacent
+                            ? (transitions || []).find((t) => t.leftClipId === clip.id && t.rightClipId === nextClip.id)
+                            : null;
+                          const isTransSelected = selectedTransition?.leftClip?.id === clip.id || selectedTransition?.id === activeTrans?.id;
+
                           return (
-                            <React.Fragment key={clip.id}>
+                            <Fragment key={clip.id}>
                               <Clip
                                 clip={clip}
                                 isSelected={clip.id === selectedClipId}
@@ -483,22 +518,29 @@ export default function TimelineEditor({
                               />
                               {isAdjacent && (
                                 <button
-                                  className={`timeline-editor__transition-btn ${selectedTransition?.leftClip?.id === clip.id ? "timeline-editor__transition-btn--selected" : ""}`}
+                                  className={`timeline-editor__transition-btn ${isTransSelected ? "timeline-editor__transition-btn--selected" : ""} ${activeTrans ? "timeline-editor__transition-btn--active" : ""}`}
                                   style={{
-                                    left: (clip.timelineStart + clip.duration) * PIXELS_PER_SECOND,
+                                    left: (clip.timelineStart + clipDur) * PIXELS_PER_SECOND,
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (onSelectTransition) {
-                                      onSelectTransition({ leftClip: clip, rightClip: nextClip, trackId: track.id, type: "Fade", duration: 1.0 });
+                                      onSelectTransition({
+                                        id: activeTrans?.id,
+                                        leftClip: clip,
+                                        rightClip: nextClip,
+                                        trackId: track.id,
+                                        type: activeTrans?.type || "Fade",
+                                        duration: activeTrans?.duration || 1.0,
+                                      });
                                     }
                                   }}
-                                  title="Transition"
+                                  title={activeTrans ? `Transisi ${activeTrans.type} (${activeTrans.duration}s)` : "Tambah Transisi"}
                                 >
                                   ⚡
                                 </button>
                               )}
-                            </React.Fragment>
+                            </Fragment>
                           );
                         })}
                       </div>

@@ -4,10 +4,11 @@ import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { PrismaModule } from './prisma/prisma.module'
+import { PrismaModule } from './prisma/prisma.module';
 import { ProjectModule } from './project/project.module';
 import { MediaModule } from './media/media.module';
 import { TimelineModule } from './timeline/timeline.module';
+import { ExportModule } from './export/export.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { TimelineModule } from './timeline/timeline.module';
       serveRoot: '/uploads',
     }),
     TimelineModule,
+    ExportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

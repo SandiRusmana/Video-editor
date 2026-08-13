@@ -43,4 +43,20 @@ export class ClipController {
   ) {
     return this.timelineService.updateClip(req.user.userId, id, dto);
   }
+
+  // PATCH /clips/:id/scale — update clip scale/zoom metadata
+  @Patch(':id/scale')
+  scaleClip(@Req() req, @Param('id') id: string, @Body() dto: { scale: number }) {
+    return this.timelineService.updateClip(req.user.userId, id, { scale: dto.scale });
+  }
+
+  // PATCH /clips/:id/position — update clip X & Y position metadata
+  @Patch(':id/position')
+  positionClip(
+    @Req() req,
+    @Param('id') id: string,
+    @Body() dto: { x?: number; y?: number },
+  ) {
+    return this.timelineService.updateClip(req.user.userId, id, dto);
+  }
 }

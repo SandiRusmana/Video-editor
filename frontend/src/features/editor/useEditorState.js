@@ -46,12 +46,107 @@ export default function useEditorState(projectId) {
 
   const [tracks, setTracks] = useState([]);
   const [clips, setClips] = useState([]);
+  const [transitions, setTransitions] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(true);
   const [timelineError, setTimelineError] = useState("");
 
   const [selectedClipId, setSelectedClipId] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // ---- AUTO SAVE SYSTEM STATE & MANAGERS ----
+  const [saveStatus, setSaveStatus] = useState("Saved"); // "Saved" | "Saving..." | "Failed" | "Retry Saving..."
+  const [toastMessage, setToastMessage] = useState(null);
+  const pendingSaveRef = useRef(null);
+  const isRetryingRef = useRef(false);
+  const propTimersRef = useRef({});
+  const trimTimersRef = useRef({});
+
+  const showToast = useCallback((msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  }, []);
+
+  // Main Auto Save Executor
+  const executeAutoSave = useCallback(
+    async (saveAction, isRetry = false) => {
+      if (!saveAction) return false;
+      setSaveStatus(isRetry ? "Retry Saving..." : "Saving...");
+      if (isRetry) isRetryingRef.current = true;
+      try {
+        await saveAction();
+        setSaveStatus("Saved");
+        pendingSaveRef.current = null;
+        isRetryingRef.current = false;
+        if (isRetry) {
+          showToast("✓ Auto Save berhasil: Perubahan project tersimpan");
+        }
+        return true;
+      } catch (err) {
+        console.error("Auto Save error:", err);
+        pendingSaveRef.current = saveAction;
+        isRetryingRef.current = false;
+        setSaveStatus("Failed");
+        showToast(`❌ Auto Save gagal: ${err.message || "Koneksi terputus"}. Mencoba menyimpan kembali...`);
+        return false;
+      }
+    },
+    [showToast]
+  );
+
+  const retryAutoSave = useCallback(() => {
+    if (pendingSaveRef.current && !isRetryingRef.current) {
+      executeAutoSave(pendingSaveRef.current, true);
+    }
+  }, [executeAutoSave]);
+
+  // Online listener & Periodic Retry for Failed Auto Saves
+  useEffect(() => {
+    const handleOnline = () => {
+      if (pendingSaveRef.current && (saveStatus === "Failed" || saveStatus === "Retry Saving...")) {
+        showToast("🌐 Koneksi terhubung kembali. Melakukan Auto Save...");
+        retryAutoSave();
+      }
+    };
+    window.addEventListener("online", handleOnline);
+
+    const interval = setInterval(() => {
+      if (pendingSaveRef.current && saveStatus === "Failed" && !isRetryingRef.current) {
+        retryAutoSave();
+      }
+    }, 5000);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      clearInterval(interval);
+    };
+  }, [saveStatus, retryAutoSave, showToast]);
+
+  // Browser navigation guard for unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (saveStatus === "Saving..." || saveStatus === "Retry Saving..." || saveStatus === "Failed") {
+        e.preventDefault();
+        e.returnValue = "Perubahan belum berhasil disimpan ke server. Yakin ingin keluar?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [saveStatus]);
+
+  // Project Metadata Auto Save endpoint
+  const autoSaveProjectMetadata = useCallback(
+    async (dto) => {
+      if (!projectId) return;
+      return executeAutoSave(async () => {
+        await apiFetch(`/projects/${projectId}/auto-save`, {
+          method: "PATCH",
+          body: JSON.stringify(dto),
+        });
+      });
+    },
+    [projectId, executeAutoSave]
+  );
 
   // ---- Ambil Media Library dari backend ----
   const loadMedia = useCallback(async () => {
@@ -103,13 +198,14 @@ export default function useEditorState(projectId) {
             url: `${API_BASE}${created.path}`,
           },
         ]);
+        showToast("✓ Media berhasil diunggah");
       } catch (err) {
-        alert(err.message || "Gagal mengunggah media");
+        showToast(err.message || "Gagal mengunggah media");
       } finally {
         setIsUploading(false);
       }
     },
-    [projectId],
+    [projectId, showToast],
   );
 
   // ---- Hapus media dari library ----
@@ -118,10 +214,11 @@ export default function useEditorState(projectId) {
     try {
       await apiFetch(`/media/${mediaId}`, { method: "DELETE" });
       setMediaLibrary((prev) => prev.filter((m) => m.id !== mediaId));
+      showToast("✓ Media berhasil dihapus dari library");
     } catch (err) {
-      alert(err.message || "Gagal menghapus media");
+      showToast(err.message || "Gagal menghapus media");
     }
-  }, []);
+  }, [showToast]);
 
   // ---- Ambil Timeline (semua track + clip) dari backend ----
   const loadTimeline = useCallback(async () => {
@@ -147,7 +244,8 @@ export default function useEditorState(projectId) {
               name: isText
                 ? clip.textContent || "Teks Baru"
                 : clip.media?.name ?? "(media tidak ditemukan)",
-              type: isText ? "text" : (clip.media?.type || "video").toLowerCase(),
+              type: isText ? "text" : (clip.media?.type ?? "video").toLowerCase(),
+              duration: Math.max(0.1, (clip.outPoint ?? 5) - (clip.inPoint ?? 0)),
               sourceDuration: isText ? 9999 : (clip.media?.duration ?? clip.outPoint ?? 5),
               trimStart: clip.inPoint ?? 0,
               trimEnd: clip.outPoint ?? 5,
@@ -174,7 +272,21 @@ export default function useEditorState(projectId) {
         )
         .sort((a, b) => (a.timelineStart ?? 0) - (b.timelineStart ?? 0));
 
+      const flatTransitions = (Array.isArray(trackData) ? trackData : []).flatMap((track) =>
+        (track.transitions || []).map((t) => {
+          const fullLeft = flatClips.find((c) => c.id === t.leftClipId) || t.leftClip || null;
+          const fullRight = flatClips.find((c) => c.id === t.rightClipId) || t.rightClip || null;
+          return {
+            ...t,
+            trackId: track.id,
+            leftClip: fullLeft,
+            rightClip: fullRight,
+          };
+        })
+      );
+
       setClips(flatClips);
+      setTransitions(flatTransitions);
     } catch (err) {
       setTimelineError(err.message || "Gagal memuat Timeline");
     } finally {
@@ -187,31 +299,30 @@ export default function useEditorState(projectId) {
     loadTimeline();
   }, [loadMedia, loadTimeline]);
 
-  // Tambah clip media ke track
+  // Tambah clip media ke track dengan Auto Save
   const addClipToTimeline = useCallback(
-    async (media, targetTrackId) => {
+    async (media, targetTrackId, timelineStart) => {
       if (!projectId) return;
-      try {
+      await executeAutoSave(async () => {
         await apiFetch(`/projects/${projectId}/timeline/clips`, {
           method: "POST",
           body: JSON.stringify({
             mediaId: media.id,
             ...(targetTrackId ? { trackId: targetTrackId } : {}),
+            ...(timelineStart !== undefined ? { timelineStart } : {}),
           }),
         });
         await loadTimeline();
-      } catch (err) {
-        alert(err.message || "Gagal menambahkan media ke timeline");
-      }
+      });
     },
-    [projectId, loadTimeline],
+    [projectId, loadTimeline, executeAutoSave],
   );
 
-  // Tambah text clip ke DB
+  // Tambah text clip ke DB dengan Auto Save
   const addTextClip = useCallback(
     async (opts = {}) => {
       if (!projectId) return;
-      try {
+      await executeAutoSave(async () => {
         const created = await apiFetch(`/projects/${projectId}/timeline/clips`, {
           method: "POST",
           body: JSON.stringify({
@@ -224,33 +335,29 @@ export default function useEditorState(projectId) {
         });
         await loadTimeline();
         setSelectedClipId(created.id);
-      } catch (err) {
-        alert(err.message || "Gagal menambahkan teks ke timeline");
-      }
+      });
     },
-    [projectId, currentTime, loadTimeline],
+    [projectId, currentTime, loadTimeline, executeAutoSave],
   );
 
-  // Tambah image overlay ke track (default di currentTime)
+  // Tambah image overlay ke track dengan Auto Save
   const addImageOverlay = useCallback(
     async (media, targetTrackId) => {
       if (!projectId || !media) return;
-      try {
+      await executeAutoSave(async () => {
         await apiFetch(`/projects/${projectId}/timeline/clips`, {
           method: "POST",
           body: JSON.stringify({
             mediaId: media.id,
             trackId: targetTrackId,
             timelineStart: currentTime,
-            duration: 5, // Default duration for image overlay
+            duration: 5,
           }),
         });
         await loadTimeline();
-      } catch (err) {
-        alert(err.message || "Gagal menambahkan image overlay ke timeline");
-      }
+      });
     },
-    [projectId, currentTime, loadTimeline],
+    [projectId, currentTime, loadTimeline, executeAutoSave],
   );
 
   const clipsWithLayout = useMemo(() => {
@@ -277,8 +384,7 @@ export default function useEditorState(projectId) {
 
   const selectedClip = clipsWithLayout.find((c) => c.id === selectedClipId) || null;
 
-  const trimTimersRef = useRef({});
-
+  // Trim Clip dengan Debounced Auto Save
   const updateClipTrim = useCallback(
     (clipId, { trimStart, trimEnd }) => {
       let computedStart, computedEnd, computedTimelineStart;
@@ -291,8 +397,13 @@ export default function useEditorState(projectId) {
           let newEnd = trimEnd ?? clip.trimEnd;
 
           newStart = Math.max(0, Math.min(newStart, clip.trimEnd - MIN_CLIP_DURATION));
+          const maxAllowedDuration =
+            clip.type === "image" || clip.type === "text" || clip.trackType === "TEXT" || !clip.mediaId
+              ? 9999
+              : clip.sourceDuration || 9999;
+
           newEnd = Math.min(
-            clip.sourceDuration || 9999,
+            maxAllowedDuration,
             Math.max(newEnd, clip.trimStart + MIN_CLIP_DURATION),
           );
 
@@ -316,9 +427,10 @@ export default function useEditorState(projectId) {
 
       if (computedStart === undefined) return;
 
+      setSaveStatus("Saving...");
       clearTimeout(trimTimersRef.current[clipId]);
-      trimTimersRef.current[clipId] = setTimeout(async () => {
-        try {
+      trimTimersRef.current[clipId] = setTimeout(() => {
+        executeAutoSave(async () => {
           await apiFetch(`/clips/${clipId}/trim`, {
             method: "PATCH",
             body: JSON.stringify({
@@ -327,41 +439,37 @@ export default function useEditorState(projectId) {
               timelineStart: computedTimelineStart,
             }),
           });
-        } catch (err) {
-          alert(err.message || "Gagal menyimpan hasil trim");
-          loadTimeline();
-        }
+        });
       }, 400);
     },
-    [loadTimeline],
+    [executeAutoSave],
   );
 
+  // Update Properti Clip dengan Debounced Auto Save
   const updateClipProperties = useCallback(
-    async (clipId, properties) => {
+    (clipId, properties) => {
       if (!clipId) return;
+
+      // Optimistic update pada local state
       setClips((prev) =>
         prev.map((c) => (c.id === clipId ? { ...c, ...properties } : c)),
       );
-      try {
-        await apiFetch(`/clips/${clipId}`, {
-          method: "PATCH",
-          body: JSON.stringify(properties),
+
+      setSaveStatus("Saving...");
+      clearTimeout(propTimersRef.current[clipId]);
+      propTimersRef.current[clipId] = setTimeout(() => {
+        executeAutoSave(async () => {
+          await apiFetch(`/clips/${clipId}`, {
+            method: "PATCH",
+            body: JSON.stringify(properties),
+          });
         });
-      } catch (err) {
-        alert(err.message || "Gagal memperbarui properti clip");
-        await loadTimeline();
-      }
+      }, 500);
     },
-    [loadTimeline],
+    [executeAutoSave],
   );
 
-  const [toastMessage, setToastMessage] = useState(null);
-
-  const showToast = useCallback((msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  }, []);
-
+  // Memindahkan Clip antar Track dengan Auto Save
   const moveClipToTrack = useCallback(
     async (clipId, targetTrackId, dropTimelineStart) => {
       if (!clipId || !targetTrackId || !projectId) return;
@@ -371,12 +479,10 @@ export default function useEditorState(projectId) {
 
       const sourceTrackId = movedClip.trackId;
 
-      // Filter existing clips on target track excluding moved clip
       const targetTrackClips = clips
         .filter((c) => c.trackId === targetTrackId && c.id !== clipId)
         .sort((a, b) => a.timelineStart - b.timelineStart);
 
-      // Determine insertion index based on drop timeline position
       let insertIndex = targetTrackClips.length;
       for (let i = 0; i < targetTrackClips.length; i++) {
         const c = targetTrackClips[i];
@@ -387,7 +493,6 @@ export default function useEditorState(projectId) {
         }
       }
 
-      // Build updated list of target track clips
       const newTargetClips = [...targetTrackClips];
       newTargetClips.splice(insertIndex, 0, { ...movedClip, trackId: targetTrackId });
 
@@ -403,7 +508,6 @@ export default function useEditorState(projectId) {
         targetCursor += clipDuration;
       });
 
-      // If moved across tracks, recalculate source track clips side-by-side
       if (sourceTrackId !== targetTrackId) {
         const sourceTrackClips = clips
           .filter((c) => c.trackId === sourceTrackId && c.id !== clipId)
@@ -429,19 +533,15 @@ export default function useEditorState(projectId) {
         }),
       );
 
-      try {
+      await executeAutoSave(async () => {
         await apiFetch(`/projects/${projectId}/timeline/move-clips`, {
           method: "PATCH",
           body: JSON.stringify({ updates }),
         });
-        showToast("Posisi clip berhasil diperbarui");
         await loadTimeline();
-      } catch (err) {
-        showToast(err.message || "Gagal memindahkan clip");
-        await loadTimeline();
-      }
+      });
     },
-    [clips, projectId, loadTimeline, showToast],
+    [clips, projectId, loadTimeline, executeAutoSave],
   );
 
   const selectClip = useCallback((clipId) => setSelectedClipId(clipId), []);
@@ -456,33 +556,29 @@ export default function useEditorState(projectId) {
       return;
     }
 
-    try {
+    await executeAutoSave(async () => {
       await apiFetch(`/clips/${selectedClip.id}/split`, {
         method: "POST",
         body: JSON.stringify({ atTime: currentTime }),
       });
       await loadTimeline();
       deselectClip();
-    } catch (err) {
-      alert(err.message || "Gagal melakukan split clip");
-    }
-  }, [selectedClip, currentTime, loadTimeline, deselectClip]);
+    });
+  }, [selectedClip, currentTime, loadTimeline, deselectClip, executeAutoSave]);
 
   const splitClipAt = useCallback(
     async (clipId, atTime) => {
       if (!clipId) return;
-      try {
+      await executeAutoSave(async () => {
         await apiFetch(`/clips/${clipId}/split`, {
           method: "POST",
           body: JSON.stringify({ atTime }),
         });
         await loadTimeline();
         deselectClip();
-      } catch (err) {
-        alert(err.message || "Gagal melakukan split clip");
-      }
+      });
     },
-    [loadTimeline, deselectClip],
+    [loadTimeline, deselectClip, executeAutoSave],
   );
 
   const canSplit =
@@ -498,14 +594,13 @@ export default function useEditorState(projectId) {
       const clipName = clipToDelete?.name || "Clip";
       const trackId = clipToDelete?.trackId;
 
-      try {
+      await executeAutoSave(async () => {
         await apiFetch(`/projects/${projectId}/timeline/clips/${clipId}`, {
           method: "DELETE",
         });
 
         if (selectedClipId === clipId) deselectClip();
 
-        // Ripple adjustment: calculate side-by-side timestamps for remaining clips on track
         if (trackId) {
           const remainingClips = clips
             .filter((c) => c.trackId === trackId && c.id !== clipId)
@@ -533,12 +628,9 @@ export default function useEditorState(projectId) {
 
         showToast(`Clip "${clipName}" berhasil dihapus dari timeline`);
         await loadTimeline();
-      } catch (err) {
-        showToast(err.message || "Gagal menghapus clip");
-        await loadTimeline();
-      }
+      });
     },
-    [projectId, clips, selectedClipId, deselectClip, showToast, loadTimeline],
+    [projectId, clips, selectedClipId, deselectClip, showToast, loadTimeline, executeAutoSave],
   );
 
   const reorderClip = useCallback((clipId, targetIndex) => {
@@ -560,32 +652,77 @@ export default function useEditorState(projectId) {
   const addTrack = useCallback(
     async (type = "VIDEO", name) => {
       if (!projectId) return;
-      try {
+      await executeAutoSave(async () => {
         await apiFetch(`/projects/${projectId}/tracks`, {
           method: "POST",
           body: JSON.stringify({ type, name }),
         });
         await loadTimeline();
-      } catch (err) {
-        alert(err.message || "Gagal menambahkan track");
-      }
+      });
     },
-    [projectId, loadTimeline],
+    [projectId, loadTimeline, executeAutoSave],
   );
 
   const deleteTrack = useCallback(
     async (trackId) => {
       if (!projectId || !trackId) return;
-      try {
+      await executeAutoSave(async () => {
         await apiFetch(`/projects/${projectId}/tracks/${trackId}`, {
           method: "DELETE",
         });
         await loadTimeline();
-      } catch (err) {
-        alert(err.message || "Gagal menghapus track");
-      }
+      });
     },
-    [projectId, loadTimeline],
+    [projectId, loadTimeline, executeAutoSave],
+  );
+
+  // ---- TRANSITIONS API INTEGRATION ----
+  const saveTransition = useCallback(
+    async ({ leftClipId, rightClipId, type = "Fade", duration = 1.0 }) => {
+      if (!projectId || !leftClipId || !rightClipId) return null;
+      let result = null;
+      await executeAutoSave(async () => {
+        result = await apiFetch(`/projects/${projectId}/timeline/transitions`, {
+          method: "POST",
+          body: JSON.stringify({ leftClipId, rightClipId, type, duration }),
+        });
+        showToast(`Transisi "${type}" berhasil diterapkan`);
+        await loadTimeline();
+      });
+      return result;
+    },
+    [projectId, loadTimeline, showToast, executeAutoSave],
+  );
+
+  const updateTransition = useCallback(
+    async (transitionId, { type, duration }) => {
+      if (!projectId || !transitionId) return null;
+      let result = null;
+      await executeAutoSave(async () => {
+        result = await apiFetch(`/projects/${projectId}/timeline/transitions/${transitionId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ type, duration }),
+        });
+        showToast("Transisi berhasil diperbarui");
+        await loadTimeline();
+      });
+      return result;
+    },
+    [projectId, loadTimeline, showToast, executeAutoSave],
+  );
+
+  const deleteTransition = useCallback(
+    async (transitionId) => {
+      if (!projectId || !transitionId) return;
+      await executeAutoSave(async () => {
+        await apiFetch(`/projects/${projectId}/timeline/transitions/${transitionId}`, {
+          method: "DELETE",
+        });
+        showToast("Transisi berhasil dihapus dari timeline");
+        await loadTimeline();
+      });
+    },
+    [projectId, loadTimeline, showToast, executeAutoSave],
   );
 
   return {
@@ -601,7 +738,9 @@ export default function useEditorState(projectId) {
     timelineError,
     totalDuration,
     selectedClip,
+    selectedClipId,
     selectClip,
+    setSelectedClipId: selectClip,
     deselectClip,
     updateClipTrim,
     updateClipProperties,
@@ -618,10 +757,18 @@ export default function useEditorState(projectId) {
     deleteClip,
     onDeleteClip: deleteClip,
     onSplitClip: splitClipAt,
+    transitions,
+    saveTransition,
+    updateTransition,
+    deleteTransition,
     currentTime,
     setCurrentTime,
     isPlaying,
     setIsPlaying,
+    isSaving: saveStatus === "Saving..." || saveStatus === "Retry Saving...",
+    saveStatus,
+    retryAutoSave,
+    autoSaveProjectMetadata,
     toastMessage,
     showToast,
     refreshTimeline: loadTimeline,
