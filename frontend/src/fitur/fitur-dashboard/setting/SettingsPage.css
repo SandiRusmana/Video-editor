@@ -185,6 +185,7 @@
 }
 
 .form-group input {
+  width: 100%;
   background: #16162e;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
@@ -193,6 +194,36 @@
   padding: 12px;
   outline: none;
   transition: border-color 0.2s;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  padding-right: 44px;
+}
+
+.btn-toggle-password {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.btn-toggle-password:hover {
+  color: #ffffff;
 }
 
 .form-group input:focus {

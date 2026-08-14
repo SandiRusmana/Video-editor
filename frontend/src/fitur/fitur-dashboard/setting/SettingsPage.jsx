@@ -19,9 +19,28 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
+function IconEye({ show }) {
+  return show ? (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
 export default function SettingsPage() {
   const [activeSubTab, setActiveSubTab] = useState("profile"); // "profile" | "preferences" | "security"
   const [userData, setUserData] = useState({ name: "Asep", email: "asep@gmail.com" });
+
+  // Password visibility states
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   // Password fields
   const [passwordData, setPasswordData] = useState({
@@ -150,39 +169,69 @@ export default function SettingsPage() {
 
                 <div className="form-group">
                   <label htmlFor="currentPassword">Current password</label>
-                  <input
-                    type="password"
-                    id="currentPassword"
-                    name="currentPassword"
-                    placeholder="*************"
-                    value={passwordData.currentPassword}
-                    onChange={handlePasswordChange}
-                    required
-                  />
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showCurrentPw ? "text" : "password"}
+                      id="currentPassword"
+                      name="currentPassword"
+                      placeholder="*************"
+                      value={passwordData.currentPassword}
+                      onChange={handlePasswordChange}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn-toggle-password"
+                      onClick={() => setShowCurrentPw(!showCurrentPw)}
+                      title={showCurrentPw ? "Sembunyikan password" : "Tampilkan password"}
+                    >
+                      <IconEye show={showCurrentPw} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-group">
                   <label htmlFor="newPassword">New password</label>
-                  <input
-                    type="password"
-                    id="newPassword"
-                    name="newPassword"
-                    value={passwordData.newPassword}
-                    onChange={handlePasswordChange}
-                    required
-                  />
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showNewPw ? "text" : "password"}
+                      id="newPassword"
+                      name="newPassword"
+                      value={passwordData.newPassword}
+                      onChange={handlePasswordChange}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn-toggle-password"
+                      onClick={() => setShowNewPw(!showNewPw)}
+                      title={showNewPw ? "Sembunyikan password" : "Tampilkan password"}
+                    >
+                      <IconEye show={showNewPw} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-group">
                   <label htmlFor="confirmPassword">Confirm New password</label>
-                  <input
-                    type="password"
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    value={passwordData.confirmPassword}
-                    onChange={handlePasswordChange}
-                    required
-                  />
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showConfirmPw ? "text" : "password"}
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      value={passwordData.confirmPassword}
+                      onChange={handlePasswordChange}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn-toggle-password"
+                      onClick={() => setShowConfirmPw(!showConfirmPw)}
+                      title={showConfirmPw ? "Sembunyikan password" : "Tampilkan password"}
+                    >
+                      <IconEye show={showConfirmPw} />
+                    </button>
+                  </div>
                 </div>
 
                 <button type="submit" className="settings-btn-primary">
