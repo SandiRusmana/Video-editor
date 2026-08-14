@@ -1,75 +1,78 @@
-// Service module to manage Export History in LocalStorage
+// Service module to manage Export History via Backend API with LocalStorage fallback
 const STORAGE_KEY = "export_history_v1";
 
-const INITIAL_MOCK_DATA = [
-  {
-    id: "exp-101",
-    projectId: "proj-1",
-    projectName: "My Gameplay",
-    fileName: "gameplay.mp4",
-    resolution: "1080p",
-    format: "MP4",
-    sizeMb: 54,
-    sizeDisplay: "54 MB",
-    dateTime: "27 Jul 2026 14.30 WIB",
-    timestamp: new Date("2026-07-27T14:30:00").getTime(),
-    status: "Done", // "Done" | "Rendering" | "Failed"
-    progress: 100,
-    errorMessage: null,
-    editingData: {
-      timeline: { tracksCount: 3, clipsCount: 5 },
-    },
-  },
-  {
-    id: "exp-102",
-    projectId: "proj-2",
-    projectName: "Youtube Promo",
-    fileName: "trailer.mp4",
-    resolution: "1080p",
-    format: "MP4",
-    sizeMb: 68,
-    sizeDisplay: "68 MB",
-    dateTime: "27 Jul 2026 15.30 WIB",
-    timestamp: new Date("2026-07-27T15:30:00").getTime(),
-    status: "Rendering",
-    progress: 65,
-    errorMessage: null,
-    editingData: {
-      timeline: { tracksCount: 2, clipsCount: 3 },
-    },
-  },
-  {
-    id: "exp-103",
-    projectId: "proj-3",
-    projectName: "Intro Chanel",
-    fileName: "intro.mp4",
-    resolution: "720p",
-    format: "MP4",
-    sizeMb: 0,
-    sizeDisplay: "- MB",
-    dateTime: "26 Jul 2026 09.30 WIB",
-    timestamp: new Date("2026-07-26T09:30:00").getTime(),
-    status: "Failed",
-    progress: 0,
-    errorMessage: "FFmpeg error",
-    editingData: {
-      timeline: { tracksCount: 1, clipsCount: 2 },
-    },
-  },
-];
+export function formatIndonesianDateTime(date = new Date()) {
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+  ];
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "-";
+  const day = d.getDate();
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, "0");
+  const mins = String(d.getMinutes()).padStart(2, "0");
+
+  return `${day} ${month} ${year} ${hours}.${mins} WIB`;
+}
+
+export async function fetchUserExportHistory() {
+  const token = localStorage.getItem("token");
+  try {
+    const res = await fetch("http://localhost:3000/export-history", {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return data.map((job) => {
+          const isDone = job.status === "DONE";
+          const isFailed = job.status === "FAILED";
+          const formattedDate = job.createdAt
+            ? formatIndonesianDateTime(job.createdAt)
+            : "-";
+
+          return {
+            id: job.id,
+            projectId: job.projectId,
+            projectName: job.projectName || "Project Video",
+            fileName: job.fileName || `${job.projectName || "video"}.mp4`,
+            resolution: job.resolution || "1080p",
+            format: job.format || "MP4",
+            fileSize: job.fileSize || 0,
+            sizeDisplay: job.sizeDisplay || (job.fileSize > 0 ? `${(job.fileSize / (1024 * 1024)).toFixed(1)} MB` : "- MB"),
+            dateTime: formattedDate,
+            createdAt: job.createdAt,
+            timestamp: new Date(job.createdAt || Date.now()).getTime(),
+            status: isDone ? "Done" : isFailed ? "Failed" : "Rendering",
+            progress: job.progress || (isDone ? 100 : 10),
+            errorMessage: job.errorMsg || (isFailed ? "FFmpeg rendering error" : null),
+            downloadUrl: job.downloadUrl,
+          };
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Gagal mengambil data export history dari backend:", err);
+  }
+
+  // Fallback to localStorage if API fails or offline
+  return getExportHistory();
+}
 
 export function getExportHistory() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_MOCK_DATA));
-      return INITIAL_MOCK_DATA;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : INITIAL_MOCK_DATA;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error("Gagal membaca export history dari localStorage:", err);
-    return INITIAL_MOCK_DATA;
+    return [];
   }
 }
 
@@ -132,54 +135,29 @@ export function deleteExportRecord(id) {
 
 export function downloadExportedFile(record) {
   if (!record) return;
-  
-  const fileName = record.fileName || "exported_video.mp4";
-  const content = `NERVE Video Editor - Exported Video Demo
-Project: ${record.projectName}
-File: ${fileName}
-Resolution: ${record.resolution}
-Format: ${record.format}
-Export Date: ${record.dateTime}
-Status: ${record.status}
-Editing Payload Snapshot: ${JSON.stringify(record.editingData || {}, null, 2)}`;
-
-  const blob = new Blob([content], { type: "video/mp4" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-export function formatIndonesianDateTime(date = new Date()) {
-  const months = [
-    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-    "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
-  ];
-  const day = date.getDate();
-  const month = months[date.getMonth()];
-  const year = date.getFullYear();
-  const hours = String(date.getHours()).padStart(2, "0");
-  const mins = String(date.getMinutes()).padStart(2, "0");
-
-  return `${day} ${month} ${year} ${hours}.${mins} WIB`;
+  if (record.id) {
+    const downloadApiUrl = `http://localhost:3000/export/download/${record.id}`;
+    const link = document.createElement("a");
+    link.href = downloadApiUrl;
+    link.setAttribute("download", record.fileName || `${record.projectName || "video"}.mp4`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 }
 
 export function calculateStats(records = []) {
   const totalFiles = records.length;
   const totalStorageMb = records.reduce((acc, curr) => {
-    if (curr.status === "Done" && curr.sizeMb) {
-      return acc + Number(curr.sizeMb);
+    if (curr.status === "Done" && curr.fileSize) {
+      return acc + (curr.fileSize / (1024 * 1024));
     }
     return acc;
   }, 0);
 
   return {
     totalFiles,
-    totalStorageMb,
-    storageDisplay: `${totalStorageMb} MB`,
+    totalStorageMb: Math.round(totalStorageMb),
+    storageDisplay: `${Math.round(totalStorageMb)} MB`,
   };
 }

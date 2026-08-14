@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import "./ExportHistoryPage.css";
 import {
-  getExportHistory,
+  fetchUserExportHistory,
   calculateStats,
   downloadExportedFile,
-  updateExportRecord,
 } from "../../../services/exportHistoryService";
 
 function IconDownload() {
@@ -38,55 +37,72 @@ function IconRefresh() {
   );
 }
 
+function IconInfo() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 export default function ExportHistoryPage() {
   const [historyItems, setHistoryItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedDetailItem, setSelectedDetailItem] = useState(null);
 
-  const loadData = () => {
-    setIsRefreshing(true);
-    const items = getExportHistory();
-    setHistoryItems(items);
-    setTimeout(() => setIsRefreshing(false), 300);
+  const loadData = async (showRefresh = false) => {
+    if (showRefresh) setIsRefreshing(true);
+    try {
+      const items = await fetchUserExportHistory();
+      setHistoryItems(items || []);
+    } catch (err) {
+      console.error("Gagal memuat data export history:", err);
+    } finally {
+      setIsLoading(false);
+      if (showRefresh) {
+        setTimeout(() => setIsRefreshing(false), 300);
+      }
+    }
   };
 
   useEffect(() => {
     loadData();
+
+    // Auto-poll status every 3 seconds if there are active rendering jobs
+    const pollInterval = setInterval(async () => {
+      const items = await fetchUserExportHistory();
+      if (items) setHistoryItems(items);
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
   }, []);
 
   const stats = calculateStats(historyItems);
 
-  const handleDownload = (item) => {
+  const handleDownload = (item, e) => {
+    if (e) e.stopPropagation();
     downloadExportedFile(item);
   };
 
-  const handleRetry = (item) => {
-    // Retry simulation logic
-    updateExportRecord(item.id, {
-      status: "Rendering",
-      progress: 0,
-      errorMessage: null,
-    });
-    setHistoryItems(getExportHistory());
+  const openDetailModal = (item, e) => {
+    if (e) e.stopPropagation();
+    setSelectedDetailItem(item);
+  };
 
-    let currProgress = 0;
-    const interval = setInterval(() => {
-      currProgress += 20;
-      if (currProgress >= 100) {
-        clearInterval(interval);
-        updateExportRecord(item.id, {
-          status: "Done",
-          progress: 100,
-          sizeMb: item.sizeMb > 0 ? item.sizeMb : 45,
-          errorMessage: null,
-        });
-        setHistoryItems(getExportHistory());
-      } else {
-        updateExportRecord(item.id, {
-          progress: currProgress,
-        });
-        setHistoryItems(getExportHistory());
-      }
-    }, 400);
+  const closeDetailModal = () => {
+    setSelectedDetailItem(null);
   };
 
   const renderDate = (dateTimeStr) => {
@@ -117,7 +133,7 @@ export default function ExportHistoryPage() {
 
         <button
           className="export-history__btn-refresh"
-          onClick={loadData}
+          onClick={() => loadData(true)}
           title="Refresh daftar export history"
         >
           <IconRefresh />
@@ -125,14 +141,19 @@ export default function ExportHistoryPage() {
         </button>
       </div>
 
-      {/* Table Card */}
+      {/* Table Card / Content */}
       <div className="export-history__table-card">
-        {historyItems.length === 0 ? (
+        {isLoading ? (
+          <div className="export-history__loading">
+            <div className="export-history__spinner"></div>
+            <p>Memuat riwayat export dari database...</p>
+          </div>
+        ) : historyItems.length === 0 ? (
           <div className="export-history__empty">
             <div className="export-history__empty-icon">📁</div>
             <div className="export-history__empty-title">Belum Ada Riwayat Export</div>
             <div className="export-history__empty-desc">
-              Video yang Anda export di editor akan muncul di halaman ini.
+              Video yang Anda ekspor di editor akan otomatis tersimpan di halaman ini.
             </div>
           </div>
         ) : (
@@ -151,11 +172,11 @@ export default function ExportHistoryPage() {
               {historyItems.map((item) => {
                 const dateObj = renderDate(item.dateTime);
                 const isDone = item.status === "Done";
-                const isRendering = item.status === "Rendering" || item.progress < 100;
+                const isRendering = item.status === "Rendering" || (item.progress > 0 && item.progress < 100);
                 const isFailed = item.status === "Failed";
 
                 return (
-                  <tr key={item.id}>
+                  <tr key={item.id} onClick={(e) => openDetailModal(item, e)} className="export-history__tr-clickable">
                     {/* 1. Project Name */}
                     <td>
                       <span className="export-history__proj-name">{item.projectName}</span>
@@ -166,14 +187,14 @@ export default function ExportHistoryPage() {
                       <div className="export-history__file-cell">
                         <span className="export-history__file-name">{item.fileName}</span>
                         <span className="export-history__file-format">
-                          {item.resolution}/{item.format}
+                          {item.resolution || "1080p"}/{item.format || "MP4"}
                         </span>
                       </div>
                     </td>
 
                     {/* 3. Size */}
                     <td>
-                      <span className="export-history__size-val">{item.sizeDisplay}</span>
+                      <span className="export-history__size-val">{item.sizeDisplay || "- MB"}</span>
                     </td>
 
                     {/* 4. Date & Time */}
@@ -192,7 +213,7 @@ export default function ExportHistoryPage() {
                         {isDone && (
                           <div className="export-history__status-row export-history__status--done">
                             <span className="export-history__dot"></span>
-                            <span>Done</span>
+                            <span>Completed</span>
                           </div>
                         )}
 
@@ -200,9 +221,9 @@ export default function ExportHistoryPage() {
                           <>
                             <div className="export-history__status-row export-history__status--rendering">
                               <span className="export-history__dot"></span>
-                              <span>{item.progress || 65}%</span>
+                              <span>{item.progress || 10}%</span>
                             </div>
-                            <span className="export-history__status-sub">Rendering</span>
+                            <span className="export-history__status-sub">Processing</span>
                           </>
                         )}
 
@@ -212,8 +233,8 @@ export default function ExportHistoryPage() {
                               <span className="export-history__dot"></span>
                               <span>Failed</span>
                             </div>
-                            <span className="export-history__status-sub">
-                              {item.errorMessage || "FFmpeg error"}
+                            <span className="export-history__status-sub" title={item.errorMessage}>
+                              {item.errorMessage || "FFmpeg Error"}
                             </span>
                           </>
                         )}
@@ -222,35 +243,40 @@ export default function ExportHistoryPage() {
 
                     {/* 6. Action */}
                     <td style={{ textAlign: "center" }}>
-                      {isDone && (
-                        <button
-                          className="export-history__action-btn export-history__action-btn--download"
-                          onClick={() => handleDownload(item)}
-                          title="Download Video"
-                        >
-                          <IconDownload />
-                        </button>
-                      )}
+                      <div className="export-history__action-group">
+                        {isDone && (
+                          <button
+                            className="export-history__action-btn export-history__action-btn--download"
+                            onClick={(e) => handleDownload(item, e)}
+                            title="Unduh Kembali Video"
+                          >
+                            <IconDownload />
+                            <span>Download</span>
+                          </button>
+                        )}
 
-                      {isRendering && (
-                        <button
-                          className="export-history__action-btn export-history__action-btn--rendering"
-                          disabled
-                          title="Proses rendering sedang berlangsung..."
-                        >
-                          <IconHourglass />
-                        </button>
-                      )}
+                        {isRendering && (
+                          <button
+                            className="export-history__action-btn export-history__action-btn--rendering"
+                            disabled
+                            title="Proses rendering sedang berlangsung..."
+                          >
+                            <IconHourglass />
+                            <span>Rendering</span>
+                          </button>
+                        )}
 
-                      {isFailed && (
-                        <button
-                          className="export-history__action-btn export-history__action-btn--retry"
-                          onClick={() => handleRetry(item)}
-                          title="Coba Lagi Rendering"
-                        >
-                          <IconRefresh />
-                        </button>
-                      )}
+                        {isFailed && (
+                          <button
+                            className="export-history__action-btn export-history__action-btn--failed"
+                            onClick={(e) => openDetailModal(item, e)}
+                            title="Lihat Alasan Kegagalan"
+                          >
+                            <IconInfo />
+                            <span>Detail</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -260,11 +286,78 @@ export default function ExportHistoryPage() {
         )}
       </div>
 
+      {/* Detail Modal */}
+      {selectedDetailItem && (
+        <div className="export-history__modal-backdrop" onClick={closeDetailModal}>
+          <div className="export-history__modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="export-history__modal-header">
+              <h3>DETAIL HASIL EXPORT</h3>
+              <button className="export-history__modal-close" onClick={closeDetailModal}>
+                <IconClose />
+              </button>
+            </div>
+
+            <div className="export-history__modal-body">
+              <div className="export-history__detail-grid">
+                <div className="export-history__detail-item">
+                  <label>Nama Project</label>
+                  <span>{selectedDetailItem.projectName}</span>
+                </div>
+                <div className="export-history__detail-item">
+                  <label>Nama File</label>
+                  <span>{selectedDetailItem.fileName}</span>
+                </div>
+                <div className="export-history__detail-item">
+                  <label>Resolusi & Format</label>
+                  <span>{selectedDetailItem.resolution} / {selectedDetailItem.format}</span>
+                </div>
+                <div className="export-history__detail-item">
+                  <label>Ukuran File</label>
+                  <span>{selectedDetailItem.sizeDisplay}</span>
+                </div>
+                <div className="export-history__detail-item">
+                  <label>Status Export</label>
+                  <span className={`export-history__badge export-history__badge--${selectedDetailItem.status.toLowerCase()}`}>
+                    {selectedDetailItem.status === "Done" ? "✔ Completed" : selectedDetailItem.status === "Failed" ? "❌ Failed" : "⏳ Processing"}
+                  </span>
+                </div>
+                <div className="export-history__detail-item">
+                  <label>Tanggal & Waktu</label>
+                  <span>{selectedDetailItem.dateTime}</span>
+                </div>
+              </div>
+
+              {selectedDetailItem.errorMessage && (
+                <div className="export-history__detail-error">
+                  <label>Penyebab Kegagalan (Reason)</label>
+                  <p>{selectedDetailItem.errorMessage}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="export-history__modal-footer">
+              {selectedDetailItem.status === "Done" && (
+                <button
+                  className="export-history__btn-modal-download"
+                  onClick={() => handleDownload(selectedDetailItem)}
+                >
+                  <IconDownload />
+                  <span>Download Video</span>
+                </button>
+              )}
+              <button className="export-history__btn-modal-close" onClick={closeDetailModal}>
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Hint Banner */}
       <div className="export-history__hint-banner">
         <span className="export-history__hint-icon">💡</span>
         <span>
-          Klik <span className="export-history__hint-highlight">Download</span> untuk mengunduh tanpa rendering ulang
+          Klik <span className="export-history__hint-highlight">Download</span> untuk mengunduh ulang video tanpa harus melakukan proses rendering ulang.
         </span>
       </div>
     </main>

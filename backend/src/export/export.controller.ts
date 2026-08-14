@@ -42,6 +42,12 @@ export class ExportController {
     return this.exportService.getProjectExportHistory(projectId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('export-history')
+  async getUserExportHistory(@Request() req: any) {
+    return this.exportService.getUserExportHistory(req.user.userId || req.user.id);
+  }
+
   @Get('export/download/:jobId')
   async downloadFile(@Param('jobId') jobId: string, @Res() res: Response) {
     const jobInfo = await this.exportService.getJobStatus(jobId);

@@ -161,6 +161,57 @@ export class ExportService {
     });
   }
 
+  async getUserExportHistory(userId: string) {
+    const jobs = await this.prisma.exportJob.findMany({
+      where: { project: { ownerId: userId } },
+      include: { project: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return jobs.map((job) => {
+      let fileSize = 0;
+      let fileName = `${job.project?.name || 'video'}.mp4`;
+      let downloadUrl = job.outputPath ? `/uploads/exports/${path.basename(job.outputPath)}` : null;
+
+      if (job.outputPath && fs.existsSync(job.outputPath)) {
+        fileSize = fs.statSync(job.outputPath).size;
+        fileName = path.basename(job.outputPath);
+      }
+
+      let resolution = '1080p';
+      let format = 'MP4';
+
+      if (job.outputPath) {
+        const lowerPath = job.outputPath.toLowerCase();
+        if (lowerPath.includes('720p')) resolution = '720p';
+        else if (lowerPath.includes('1080p')) resolution = '1080p';
+
+        if (lowerPath.endsWith('.webm')) format = 'WEBM';
+        else if (lowerPath.endsWith('.mp4')) format = 'MP4';
+      }
+
+      const sizeMbStr = fileSize > 0 ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB` : '0 MB';
+
+      return {
+        id: job.id,
+        projectId: job.projectId,
+        projectName: job.project?.name || 'Project',
+        fileName,
+        resolution,
+        format,
+        status: job.status,
+        progress: job.progress,
+        outputPath: job.outputPath,
+        downloadUrl,
+        fileSize,
+        sizeDisplay: sizeMbStr,
+        errorMsg: job.errorMsg,
+        createdAt: job.createdAt,
+        finishedAt: job.finishedAt,
+      };
+    });
+  }
+
   private async processExportJob(jobId: string, project: any, dto: CreateExportDto) {
     await this.prisma.exportJob.update({
       where: { id: jobId },
@@ -178,7 +229,8 @@ export class ExportService {
     }
 
     const sanitizedProjectName = (project.name || 'video').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const outputFilename = `${sanitizedProjectName}_${Date.now()}.${dto.format || 'mp4'}`;
+    const resTag = dto.resolution || (is1080p ? '1080p' : '720p');
+    const outputFilename = `${sanitizedProjectName}_${resTag}_${Date.now()}.${dto.format || 'mp4'}`;
     const outputPath = path.join(exportsDir, outputFilename);
 
     const allClips = project.tracks.flatMap((t: any) =>
