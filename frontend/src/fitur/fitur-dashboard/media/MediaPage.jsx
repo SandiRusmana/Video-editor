@@ -358,19 +358,24 @@ export default function MediaPage() {
     [selectedProjectId, loadMedia]
   );
 
-  // Delete
-  const handleDelete = useCallback(
-    async (mediaId) => {
-      if (!window.confirm("Yakin ingin menghapus media ini?")) return;
-      try {
-        await apiFetch(`/media/${mediaId}`, { method: "DELETE" });
-        setMediaList((prev) => prev.filter((m) => m.id !== mediaId));
-      } catch (err) {
-        alert(err.message || "Gagal menghapus media");
-      }
-    },
-    []
-  );
+  // Delete Modal State
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, mediaId: null });
+
+  const handleDelete = useCallback((mediaId) => {
+    setDeleteModal({ isOpen: true, mediaId });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteModal.mediaId) return;
+    try {
+      await apiFetch(`/media/${deleteModal.mediaId}`, { method: "DELETE" });
+      setMediaList((prev) => prev.filter((m) => m.id !== deleteModal.mediaId));
+    } catch (err) {
+      alert(err.message || "Gagal menghapus media");
+    } finally {
+      setDeleteModal({ isOpen: false, mediaId: null });
+    }
+  }, [deleteModal.mediaId]);
 
   // Filter by search
   const filtered = mediaList.filter((m) =>
@@ -510,6 +515,41 @@ export default function MediaPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Custom Delete Confirm Modal */}
+      {deleteModal.isOpen && (
+        <div className="project-modal-backdrop" onClick={() => setDeleteModal({ isOpen: false, mediaId: null })}>
+          <div className="project-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="project-modal-header">
+              <h3>Hapus Media</h3>
+              <button className="project-modal-close" onClick={() => setDeleteModal({ isOpen: false, mediaId: null })}>
+                ✕
+              </button>
+            </div>
+            <div className="project-modal-body">
+              <p className="project-modal-desc">
+                Apakah Anda yakin ingin menghapus media ini dari project? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+            <div className="project-modal-footer">
+              <button
+                type="button"
+                className="project-modal-btn project-modal-btn-cancel"
+                onClick={() => setDeleteModal({ isOpen: false, mediaId: null })}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="project-modal-btn project-modal-btn-danger"
+                onClick={handleConfirmDelete}
+              >
+                Hapus Media
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

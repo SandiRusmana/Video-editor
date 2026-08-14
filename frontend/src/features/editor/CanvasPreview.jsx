@@ -57,6 +57,23 @@ export default function CanvasPreview({
     };
   }, []);
 
+  // Handle Keyboard Shortcuts for Fullscreen (F key / ESC) & Play/Pause (Space)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      } else if ((e.key === "f" || e.key === "F") && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
+        toggleFullscreen();
+      } else if (e.key === " " && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        handleTogglePlay();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullscreen, isPlaying]);
+
   // Dragging Canvas Clip Position
   const [draggingClipId, setDraggingClipId] = useState(null);
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, initialX: 0, initialY: 0 });
@@ -390,13 +407,38 @@ export default function CanvasPreview({
   }, [isPlaying, totalDuration, masterVideoClip, onSeek, onTogglePlay, isSeeking]);
 
   return (
-    <section className="canvas-preview">
+    <section
+      ref={containerRef}
+      className={`canvas-preview ${isFullscreen ? "canvas-preview--fullscreen" : ""}`}
+    >
       <div className="canvas-preview__header">
         <h3>CANVAS / PREVIEW VIDEO</h3>
+
+        {/* Fullscreen / Expand Button in Header */}
+        <button
+          className="canvas-preview__btn-fullscreen-header"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Keluar Fullscreen (Esc)" : "Perbesar / Fullscreen Preview (F)"}
+        >
+          {isFullscreen ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+          )}
+          <span className="fullscreen-label">{isFullscreen ? "Exit Fullscreen" : "Perbesar"}</span>
+        </button>
       </div>
 
       <div className="canvas-preview__stage" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
-        <div className="canvas-preview__inner" style={{ "--ratio": aspectRatio || "16/9" }}>
+        <div
+          className="canvas-preview__inner"
+          style={{ "--ratio": aspectRatio || "16/9" }}
+          onDoubleClick={toggleFullscreen}
+        >
           {activeVideoClips.length > 0 ? (
             activeVideoClips.map((clip, index) => {
               const isMaster = clip.id === masterVideoClip?.id;
@@ -619,10 +661,28 @@ export default function CanvasPreview({
           </button>
         </div>
 
-        <div className="canvas-preview__time-badge">
-          <span className="canvas-preview__time-current">{formatTime(currentTime)}</span>
-          <span className="canvas-preview__time-sep">/</span>
-          <span>{formatTime(totalDuration)}</span>
+        <div className="canvas-preview__controls-right">
+          <div className="canvas-preview__time-badge">
+            <span className="canvas-preview__time-current">{formatTime(currentTime)}</span>
+            <span className="canvas-preview__time-sep">/</span>
+            <span>{formatTime(totalDuration)}</span>
+          </div>
+
+          <button
+            className={`canvas-preview__btn-fullscreen-toggle ${isFullscreen ? "active" : ""}`}
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Keluar Fullscreen (Esc)" : "Perbesar / Fullscreen Mode (F)"}
+          >
+            {isFullscreen ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 

@@ -244,48 +244,101 @@ export default function Dashboard({ onBukaProject, onLogout }) {
     setActiveMenuId((prev) => (prev === id ? null : id));
   };
 
-  const handleRename = async (id) => {
-    const project = projects.find((p) => p.id === id);
-    const newName = window.prompt("Ganti nama project:", project?.name || "");
-    setActiveMenuId(null);
-    if (!newName || !newName.trim()) return;
+  const [modalConfig, setModalConfig] = useState({
+    isOpen: false,
+    type: null,
+    title: "",
+    inputValue: "",
+    targetId: null,
+    targetName: "",
+  });
 
-    try {
-      const updated = await apiFetch(`/projects/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: newName.trim() }),
-      });
-      setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
-    } catch (err) {
-      alert(err.message || "Gagal mengubah nama project");
-    }
+  const handleOpenCreateModal = () => {
+    setModalConfig({
+      isOpen: true,
+      type: "create",
+      title: "Buat Project Baru",
+      inputValue: "",
+      targetId: null,
+      targetName: "",
+    });
   };
 
-  const handleDelete = async (id) => {
+  const handleOpenRenameModal = (id) => {
     setActiveMenuId(null);
-    const confirmDelete = window.confirm("Yakin ingin menghapus project ini?");
-    if (!confirmDelete) return;
-
-    try {
-      await apiFetch(`/projects/${id}`, { method: "DELETE" });
-      setProjects((prev) => prev.filter((p) => p.id !== id));
-    } catch (err) {
-      alert(err.message || "Gagal menghapus project");
-    }
+    const proj = projects.find((p) => p.id === id);
+    if (!proj) return;
+    setModalConfig({
+      isOpen: true,
+      type: "rename",
+      title: "Ubah Nama Project",
+      inputValue: proj.name || "",
+      targetId: id,
+      targetName: proj.name || "",
+    });
   };
 
-  const handleNewProject = async () => {
-    const name = window.prompt("Nama project baru:");
-    if (!name || !name.trim()) return;
+  const handleOpenDeleteModal = (id) => {
+    setActiveMenuId(null);
+    const proj = projects.find((p) => p.id === id);
+    if (!proj) return;
+    setModalConfig({
+      isOpen: true,
+      type: "delete",
+      title: "Hapus Project",
+      inputValue: "",
+      targetId: id,
+      targetName: proj.name || "",
+    });
+  };
 
-    try {
-      const newProject = await apiFetch("/projects", {
-        method: "POST",
-        body: JSON.stringify({ name: name.trim() }),
-      });
-      setProjects((prev) => [...prev, newProject]);
-    } catch (err) {
-      alert(err.message || "Gagal membuat project baru");
+  const handleCloseModal = () => {
+    setModalConfig({
+      isOpen: false,
+      type: null,
+      title: "",
+      inputValue: "",
+      targetId: null,
+      targetName: "",
+    });
+  };
+
+  const handleSubmitModal = async (e) => {
+    if (e) e.preventDefault();
+    const { type, inputValue, targetId } = modalConfig;
+
+    if (type === "create") {
+      if (!inputValue || !inputValue.trim()) return;
+      try {
+        const newProject = await apiFetch("/projects", {
+          method: "POST",
+          body: JSON.stringify({ name: inputValue.trim() }),
+        });
+        setProjects((prev) => [...prev, newProject]);
+        handleCloseModal();
+      } catch (err) {
+        alert(err.message || "Gagal membuat project baru");
+      }
+    } else if (type === "rename") {
+      if (!inputValue || !inputValue.trim()) return;
+      try {
+        const updated = await apiFetch(`/projects/${targetId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name: inputValue.trim() }),
+        });
+        setProjects((prev) => prev.map((p) => (p.id === targetId ? updated : p)));
+        handleCloseModal();
+      } catch (err) {
+        alert(err.message || "Gagal mengubah nama project");
+      }
+    } else if (type === "delete") {
+      try {
+        await apiFetch(`/projects/${targetId}`, { method: "DELETE" });
+        setProjects((prev) => prev.filter((p) => p.id !== targetId));
+        handleCloseModal();
+      } catch (err) {
+        alert(err.message || "Gagal menghapus project");
+      }
     }
   };
 
@@ -375,7 +428,7 @@ export default function Dashboard({ onBukaProject, onLogout }) {
                 {/* New project card */}
                 <button
                   className="project-card new-project-card"
-                  onClick={handleNewProject}
+                  onClick={handleOpenCreateModal}
                 >
                   <IconPlus />
                   <span>New project</span>
@@ -417,7 +470,7 @@ export default function Dashboard({ onBukaProject, onLogout }) {
                               className="dropdown-item"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleRename(project.id);
+                                handleOpenRenameModal(project.id);
                               }}
                             >
                               <IconRename />
@@ -427,7 +480,7 @@ export default function Dashboard({ onBukaProject, onLogout }) {
                               className="dropdown-item dropdown-item-danger"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(project.id);
+                                handleOpenDeleteModal(project.id);
                               }}
                             >
                               <IconDelete />
@@ -456,6 +509,54 @@ export default function Dashboard({ onBukaProject, onLogout }) {
         {activeTab === "export-history" && <ExportHistoryPage />}
         {activeTab === "settings" && <SettingsPage />}
       </div>
+
+      {/* Custom Project Modal Dialog */}
+      {modalConfig.isOpen && (
+        <div className="project-modal-backdrop" onClick={handleCloseModal}>
+          <div className="project-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="project-modal-header">
+              <h3>{modalConfig.title}</h3>
+              <button className="project-modal-close" onClick={handleCloseModal}>
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitModal}>
+              <div className="project-modal-body">
+                {modalConfig.type === "delete" ? (
+                  <p className="project-modal-desc">
+                    Apakah Anda yakin ingin menghapus project <strong style={{ color: "#ffffff" }}>"{modalConfig.targetName}"</strong>? Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                ) : (
+                  <div className="project-modal-field">
+                    <label>NAMA PROJECT</label>
+                    <input
+                      type="text"
+                      className="project-modal-input"
+                      value={modalConfig.inputValue}
+                      onChange={(e) => setModalConfig({ ...modalConfig, inputValue: e.target.value })}
+                      placeholder="Masukkan nama project..."
+                      autoFocus
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="project-modal-footer">
+                <button type="button" className="project-modal-btn project-modal-btn-cancel" onClick={handleCloseModal}>
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className={`project-modal-btn ${modalConfig.type === "delete" ? "project-modal-btn-danger" : "project-modal-btn-primary"}`}
+                >
+                  {modalConfig.type === "delete" ? "Hapus Project" : modalConfig.type === "rename" ? "Simpan" : "Buat Project"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

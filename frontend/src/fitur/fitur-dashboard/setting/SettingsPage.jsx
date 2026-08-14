@@ -59,13 +59,22 @@ export default function SettingsPage() {
     setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
   };
 
+  // Toast Notification & Custom Modal States
+  const [toastMsg, setToastMsg] = useState("");
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 3000);
+  };
+
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert("Konfirmasi kata sandi baru tidak cocok!");
+      showToast("❌ Konfirmasi kata sandi baru tidak cocok!");
       return;
     }
-    alert("Kata sandi berhasil diperbarui!");
+    showToast("✅ Kata sandi berhasil diperbarui!");
     setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
   };
 
@@ -75,12 +84,12 @@ export default function SettingsPage() {
 
   const handlePrefSubmit = (e) => {
     e.preventDefault();
-    alert("Preferensi berhasil disimpan!");
+    showToast("✅ Preferensi berhasil disimpan!");
   };
 
   const toggle2FA = () => {
     setIs2FAEnabled(!is2FAEnabled);
-    alert(`2FA berhasil ${!is2FAEnabled ? "diaktifkan" : "dinonaktifkan"}!`);
+    showToast(`✅ 2FA berhasil ${!is2FAEnabled ? "diaktifkan" : "dinonaktifkan"}!`);
   };
 
   return (
@@ -295,7 +304,7 @@ export default function SettingsPage() {
                 </div>
                 <button
                   className="btn-text-action"
-                  onClick={() => alert("Berhasil logout dari perangkat lain!")}
+                  onClick={() => showToast("✅ Berhasil logout dari perangkat lain!")}
                 >
                   Logout dari semua perangkat lain
                 </button>
@@ -309,10 +318,7 @@ export default function SettingsPage() {
                   </p>
                   <button
                     className="btn-danger"
-                    onClick={() => {
-                      const confirm = window.confirm("Apakah Anda yakin ingin menghapus akun Anda secara permanen?");
-                      if (confirm) alert("Akun berhasil dihapus permanen.");
-                    }}
+                    onClick={() => setShowDeleteAccountModal(true)}
                   >
                     Hapus akun Permanen
                   </button>
@@ -322,6 +328,65 @@ export default function SettingsPage() {
           )}
         </main>
       </div>
+
+      {/* Toast Notification Banner */}
+      {toastMsg && (
+        <div style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          background: "#1e1b4b",
+          border: "1px solid #6366f1",
+          color: "#ffffff",
+          padding: "12px 20px",
+          borderRadius: "10px",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+          fontSize: "14px",
+          fontWeight: "600",
+          zIndex: 10000,
+          animation: "projectModalIn 0.2s ease",
+        }}>
+          {toastMsg}
+        </div>
+      )}
+
+      {/* Custom Delete Account Confirm Modal */}
+      {showDeleteAccountModal && (
+        <div className="project-modal-backdrop" onClick={() => setShowDeleteAccountModal(false)}>
+          <div className="project-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="project-modal-header">
+              <h3>Hapus Akun Permanen</h3>
+              <button className="project-modal-close" onClick={() => setShowDeleteAccountModal(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="project-modal-body">
+              <p className="project-modal-desc">
+                Apakah Anda yakin ingin menghapus akun Anda secara permanen? Semua project, media, dan data akan dihapus dan tidak dapat dikembalikan.
+              </p>
+            </div>
+            <div className="project-modal-footer">
+              <button
+                type="button"
+                className="project-modal-btn project-modal-btn-cancel"
+                onClick={() => setShowDeleteAccountModal(false)}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="project-modal-btn project-modal-btn-danger"
+                onClick={() => {
+                  setShowDeleteAccountModal(false);
+                  showToast("✅ Akun telah berhasil dihapus.");
+                }}
+              >
+                Hapus Akun
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

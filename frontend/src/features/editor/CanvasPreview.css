@@ -222,3 +222,122 @@
 .canvas-preview__time-sep {
   color: #4b4e7a;
 }
+
+/* Header Fullscreen / Perbesar Button */
+.canvas-preview__btn-fullscreen-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 6px;
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.canvas-preview__btn-fullscreen-header:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #818cf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.canvas-preview__controls-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Fullscreen Toggle Button in Controls Bar (corner brackets icon) */
+.canvas-preview__btn-fullscreen-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #282c54;
+  background: #171a33;
+  color: #a0a4d0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.canvas-preview__btn-fullscreen-toggle:hover {
+  background: #252a52;
+  color: #ffffff;
+  border-color: #6366f1;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.canvas-preview__btn-fullscreen-toggle.active {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #ffffff;
+  border-color: #818cf8;
+}
+
+/* ══════════════════════════════════════════════
+   FULLSCREEN / EXPAND THEATER MODE
+   ══════════════════════════════════════════════ */
+.canvas-preview--fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: #060713 !important;
+  z-index: 99999 !important;
+  padding: 24px 32px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  animation: fullscreenFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fullscreenFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.canvas-preview--fullscreen .canvas-preview__header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.canvas-preview--fullscreen .canvas-preview__header h3 {
+  font-size: 13px;
+  color: #a5b4fc;
+}
+
+.canvas-preview--fullscreen .canvas-preview__stage {
+  flex: 1;
+  padding: 12px 0;
+  min-height: 0 !important;
+}
+
+.canvas-preview--fullscreen .canvas-preview__inner {
+  max-width: 95vw;
+  max-height: 82vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+.canvas-preview--fullscreen .canvas-preview__controls-bar {
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+  background: rgba(17, 19, 38, 0.9);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
