@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import GradientBackground from "../../component/background/GradientBackground.jsx";
+import { API_BASE } from "../../config/api.js";
 import "./register.css";
 
 function Register({ onRegisterBerhasil, onPindahKeLogin }) {
@@ -17,7 +18,7 @@ function Register({ onRegisterBerhasil, onPindahKeLogin }) {
     setErrorMsg("");
 
     try {
-      const response = await fetch("http://localhost:3000/auth/register", {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

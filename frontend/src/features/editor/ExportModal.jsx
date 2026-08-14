@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./ExportModal.css";
+import { API_BASE } from "../../config/api.js";
 import {
   addExportRecord,
   updateExportRecord,
@@ -58,7 +59,7 @@ export default function ExportModal({
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:3000/projects/${projectId}/export`, {
+      const res = await fetch(`${API_BASE}/projects/${projectId}/export`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -81,7 +82,7 @@ export default function ExportModal({
       // Poll status every 800ms
       const pollInterval = setInterval(async () => {
         try {
-          const statusRes = await fetch(`http://localhost:3000/projects/${projectId}/export/${jobId}/status`, {
+          const statusRes = await fetch(`${API_BASE}/projects/${projectId}/export/${jobId}/status`, {
             headers: {
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
@@ -117,7 +118,7 @@ export default function ExportModal({
   const handleDownload = () => {
     const job = currentRecordRef.current;
     if (job?.id) {
-      const downloadApiUrl = `http://localhost:3000/export/download/${job.id}`;
+      const downloadApiUrl = `${API_BASE}/export/download/${job.id}`;
       const link = document.createElement("a");
       link.href = downloadApiUrl;
       link.setAttribute("download", `${projectName || "video"}.mp4`);

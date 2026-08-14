@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { API_BASE } from "../../config/api.js";
 
 export const PIXELS_PER_SECOND = 20;
 const MIN_CLIP_DURATION = 1; // detik, durasi minimum saat di-trim
-const API_BASE = "http://localhost:3000";
 
 async function apiFetch(path, options = {}) {
   const token = localStorage.getItem("token");

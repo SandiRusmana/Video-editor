@@ -5,8 +5,7 @@ import logo from "../../assets/logo.png";
 import MediaPage from "./media/MediaPage";
 import SettingsPage from "./setting/SettingsPage";
 import ExportHistoryPage from "./export-history/ExportHistoryPage";
-
-const API_BASE = "http://localhost:3000";
+import { API_BASE } from "../../config/api.js";
 
 function IconFolder() {
   return (

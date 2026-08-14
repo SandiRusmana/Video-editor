@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import GradientBackground from "../../component/background/GradientBackground.jsx";
+import { API_BASE } from "../../config/api.js";
 import "./login.css";
 
 function Login({ onLoginBerhasil, onPindahKeRegister }) {
@@ -17,7 +18,7 @@ function Login({ onLoginBerhasil, onPindahKeRegister }) {
     setErrorMsg("");
 
     try {
-      const response = await fetch("http://localhost:3000/auth/login", {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

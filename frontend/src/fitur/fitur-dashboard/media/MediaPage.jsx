@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { API_BASE } from "../../../config/api.js";
 import "./MediaPage.css";
-
-const API_BASE = "http://localhost:3000";
 
 async function apiFetch(path, options = {}) {
   const token = localStorage.getItem("token");

@@ -5,6 +5,7 @@ import Register from "./fitur/register/register.jsx";
 import Dashboard from "./fitur/fitur-dashboard/dashboard.jsx";
 import ProjectEditor from "./pages/project-editor/ProjectEditor.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import { API_BASE } from "./config/api.js";
 
 function App() {
   const [halaman, setHalaman] = useState("landing");
@@ -21,7 +22,7 @@ function App() {
     }
 
     // Verifikasi keaslian token ke backend API
-    fetch("http://localhost:3000/auth/me", {
+    fetch(`${API_BASE}/auth/me`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

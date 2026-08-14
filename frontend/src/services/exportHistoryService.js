@@ -1,3 +1,5 @@
+import { API_BASE } from "../config/api.js";
+
 // Service module to manage Export History via Backend API with LocalStorage fallback
 const STORAGE_KEY = "export_history_v1";
 
@@ -20,7 +22,7 @@ export function formatIndonesianDateTime(date = new Date()) {
 export async function fetchUserExportHistory() {
   const token = localStorage.getItem("token");
   try {
-    const res = await fetch("http://localhost:3000/export-history", {
+    const res = await fetch(`${API_BASE}/export-history`, {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
